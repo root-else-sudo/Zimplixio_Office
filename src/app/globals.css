@@ -1,26 +1,272 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Indigo — primary brand */
+  --indigo-50:  #eef2ff;
+  --indigo-100: #e0e7ff;
+  --indigo-200: #c7d2fe;
+  --indigo-300: #a5b4fc;
+  --indigo-400: #818cf8;
+  --indigo-500: #6366f1;
+  --indigo-600: #4f46e5;
+  --indigo-700: #4338ca;
+  --indigo-800: #3730a3;
+
+  /* Navy — sidebar/dark surfaces */
+  --navy-900: #060c18;
+  --navy-800: #0f2044;
+  --navy-700: #162d4a;
+  --navy-600: #1e3a5f;
+
+  /* Dark card — chart panels */
+  --dark-card: #1a1f36;
+
+  /* Logo accents */
+  --logo-green: #276229;
+  --logo-gold:  #B8924A;
+
+  /* Typography */
+  --font-heading: var(--font-poppins), 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  --font-body:    var(--font-dm-sans), 'DM Sans', ui-sans-serif, system-ui, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background: #f0f2f8;
+  color: #1a1f36;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--indigo-600);
+  outline-offset: 2px;
+}
+
+input:focus,
+textarea:focus {
+  outline: 2px solid var(--indigo-600);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+}
+
+/* ── Soft UI card — white elevated surface ── */
+.soft-card {
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 20px;
+  box-shadow:
+    0 2px 6px rgba(0,0,0,0.04),
+    0 8px 24px rgba(0,0,0,0.04);
+  transition:
+    transform 0.3s cubic-bezier(0.34,1.56,0.64,1),
+    box-shadow 0.3s ease;
+}
+.soft-card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 6px 20px rgba(79,70,229,0.10),
+    0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* ── Dark card — for charts and KPIs ── */
+.dark-card {
+  background: var(--dark-card);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 20px;
+  box-shadow: 0 4px 24px rgba(6,12,24,0.25);
+  color: #fff;
+}
+
+/* ── Stat chip ── */
+.stat-chip {
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  padding: 14px 20px;
+}
+
+/* ── Primary button ── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--indigo-600);
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px -2px rgba(79,70,229,0.4);
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--indigo-700);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px -2px rgba(79,70,229,0.5);
+}
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Outline button ── */
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  color: var(--indigo-600);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 9px 18px;
+  border-radius: 12px;
+  border: 1.5px solid var(--indigo-300);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+.btn-outline:hover:not(:disabled) {
+  background: var(--indigo-50);
+  border-color: var(--indigo-400);
+  transform: translateY(-1px);
+}
+.btn-outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Eyebrow label ── */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--indigo-500);
+  margin-bottom: 6px;
+}
+.eyebrow::before {
+  content: '';
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--indigo-400);
+  border-radius: 1px;
+}
+
+/* ── Badge pill ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+/* ── Status dot ── */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Pipeline node ring animations ── */
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(99,102,241,0.5); }
+  70%  { box-shadow: 0 0 0 8px rgba(99,102,241,0); }
+  100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
+}
+.node-pulse {
+  animation: pulse-ring 1.5s ease infinite;
+}
+
+/* ── Slide-in detail panel ── */
+.detail-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 380px;
+  background: #fff;
+  box-shadow: -8px 0 40px rgba(0,0,0,0.12);
+  z-index: 50;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  overflow-y: auto;
+}
+.detail-panel.open {
+  transform: translateX(0);
+}
+
+/* ── Hero animated gradient (sidebar) ── */
+.hero-gradient {
+  background: linear-gradient(135deg, #1e3a5f 0%, #0f2044 30%, #060c18 50%, #162d4a 70%, #0f2044 100%);
+  background-size: 300% 300%;
+  animation: heroShift 14s ease infinite;
+}
+@keyframes heroShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ── Opportunity card expand ── */
+.opp-actions {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.opp-actions.open {
+  max-height: 500px;
+}
+
+/* ── Pipeline node entrance animation ── */
+@keyframes nodeEnter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ── Pipeline connector flowing dot ── */
+@keyframes flowDot {
+  0%   { left: 0;                opacity: 0; }
+  8%   { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { left: calc(100% - 7px); opacity: 0; }
+}
+
+.flow-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--dot-color, #6366f1);
+  animation: flowDot 1.35s ease-in-out infinite;
+  pointer-events: none;
 }

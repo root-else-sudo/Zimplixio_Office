@@ -1,0 +1,79 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { ShieldCheck } from 'lucide-react'
+
+export default function VerifyMfaPage() {
+  const router = useRouter()
+  const [code, setCode] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    const res = await fetch('/api/mfa/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    })
+
+    if (!res.ok) {
+      const data = await res.json()
+      setError(data.error ?? 'Invalid code. Try again.')
+      setLoading(false)
+      return
+    }
+
+    router.push('/')
+    router.refresh()
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0f2044] flex items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <div className="bg-white rounded-2xl p-8 shadow-2xl">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h1 className="font-[family-name:var(--font-poppins)] font-bold text-lg text-gray-900">
+                Two-factor auth
+              </h1>
+              <p className="text-xs text-gray-500">Enter the code from Microsoft Authenticator</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              placeholder="000000"
+              className="w-full text-center text-2xl tracking-[0.5em] px-3.5 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              required
+            />
+
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || code.length < 6}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
+            >
+              {loading ? 'Verifying…' : 'Verify'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}

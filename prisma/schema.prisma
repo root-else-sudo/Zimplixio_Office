@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(REVIEWER)
+  mfaEnabled   Boolean  @default(false)
+  mfaSecret    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  notifications Notification[]
+  pushSubs      PushSubscription[]
+}
+
+enum Role {
+  ADMIN
+  REVIEWER
+}
+
+// ─── Agents ──────────────────────────────────────────────────────────────────
+
+model Agent {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String
+  cronSchedule String
+  scriptPath   String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  runs PipelineRun[]
+}
+
+// ─── Pipeline Runs ───────────────────────────────────────────────────────────
+
+model PipelineRun {
+  id         String    @id @default(cuid())
+  agentId    String
+  agent      Agent     @relation(fields: [agentId], references: [id])
+  status     RunStatus @default(RUNNING)
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  log        String?
+
+  posts Post[]
+}
+
+enum RunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+// ─── Posts ───────────────────────────────────────────────────────────────────
+
+model Post {
+  id            String     @id @default(cuid())
+  runId         String
+  run           PipelineRun @relation(fields: [runId], references: [id])
+  newsletter    String
+  sourceSubject String
+  sourceDate    DateTime
+  content       String
+  status        PostStatus @default(DRAFT)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+enum PostStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+  PUBLISHED
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ─── Business Opportunities ──────────────────────────────────────────────────
+
+model Opportunity {
+  id             String   @id @default(cuid())
+  title          String
+  sector         String
+  signal         String
+  zimplixioAngle String
+  actions        Json
+  generatedAt    DateTime @default(now())
+}
+
+// ─── Push Subscriptions ──────────────────────────────────────────────────────
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}
