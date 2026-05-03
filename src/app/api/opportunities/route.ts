@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { serverEnv } from '@/lib/env'
 import { withAuth } from '@/lib/rbac'
 import { toApiError } from '@/lib/errors'
+import { enqueueOpportunitiesFind } from '@/lib/jobs'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
@@ -25,8 +26,22 @@ export const GET = withAuth(async () => {
 })
 
 export const POST = withAuth(
-  async () => {
+  async (_req, _ctx, session) => {
     try {
+      if (serverEnv.PIPELINE_USE_QUEUE) {
+        const jobId = await enqueueOpportunitiesFind({
+          triggeredByUserId: session.user.id,
+        })
+        if (!jobId) {
+          return NextResponse.json(
+            { error: 'Opportunities scan already running', code: 'CONFLICT' },
+            { status: 409 }
+          )
+        }
+        return NextResponse.json({ jobId, queued: true })
+      }
+
+      // Legacy in-request path — same parity with pipeline.
       const dir = marketingDir()
       const python = path.join(dir, '.venv/bin/python3')
 

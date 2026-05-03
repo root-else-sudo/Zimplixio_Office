@@ -31,6 +31,15 @@ const ServerSchema = z.object({
   LINKEDIN_AUTHOR_ID: z.string().min(1).optional(),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+
+  // Phase 4 feature flag. When `true`, the web service enqueues a pg-boss job
+  // and returns immediately. The worker process runs the pipeline. When
+  // `false`, the legacy in-request `child_process.exec` path runs (for
+  // emergency rollback only).
+  PIPELINE_USE_QUEUE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 })
 
 function parseOrThrow<T>(schema: z.ZodSchema<T>, source: NodeJS.ProcessEnv, label: string): T {

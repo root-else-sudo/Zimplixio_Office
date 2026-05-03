@@ -3,7 +3,10 @@ import { prisma } from '@/lib/prisma'
 import { withAuth } from '@/lib/rbac'
 import { rateLimit } from '@/lib/ratelimit'
 import { apiError, toApiError } from '@/lib/errors'
-import { anthropic, MODELS } from '@/lib/ai-client'
+import { callClaude, MODELS } from '@/lib/ai-client'
+import { ANALYZE_SYSTEM } from '@/lib/ai/prompts'
+import { ANALYZE_TOOL, AnalyzeOptionsSchema } from '@/lib/ai/schemas'
+import { logger } from '@/lib/logger'
 
 const ANALYZE_LIMIT = 30
 const ANALYZE_WINDOW_MS = 60 * 60 * 1000
@@ -30,50 +33,33 @@ export const POST = withAuth<{ id: string }>(async (_req, { params }, session) =
   if (!post) return apiError('NOT_FOUND', 'Post not found')
 
   try {
-    const message = await anthropic.messages.create({
-      model: MODELS.PRIMARY,
-      max_tokens: 400,
+    const result = await callClaude({
+      route: 'posts.analyze',
+      userId: session.user.id,
+      model: MODELS.FAST,
+      maxTokens: 400,
+      system: ANALYZE_SYSTEM,
+      cacheSystem: true,
       messages: [
         {
           role: 'user',
-          content: `You are a content strategist for Zimplixio, a B2B SaaS company helping SMB owners with AI automation.
-
-Review this LinkedIn post draft and identify what's most likely off about it. Return exactly 4 short, specific options the reviewer could select to guide a rewrite. Each option should be a clear direction — not a description of the problem.
-
-Post:
-"""
-${post.content}
-"""
-
-Return a JSON array of exactly 4 strings. Each string must be under 12 words. No explanation, just the JSON array.
-
-Examples of good options:
-- "Reframe around opportunity, not risk or fear"
-- "Use simpler language, this reads too technical"
-- "Make the hook stronger before the cutoff"
-- "Focus on a single clear insight, not multiple points"
-- "The CTA is too generic, make it more specific"
-- "Tone is too formal, needs to sound more conversational"`,
+          content: `Review this LinkedIn post draft and propose 4 revision directions:\n\n"""\n${post.content}\n"""`,
         },
       ],
+      tools: [ANALYZE_TOOL],
+      forceTool: ANALYZE_TOOL.name,
     })
 
-    const raw = (message.content[0] as { type: string; text: string }).text.trim()
-
-    let options: string[]
-    try {
-      const match = raw.match(/\[[\s\S]*\]/)
-      options = JSON.parse(match ? match[0] : raw)
-    } catch {
-      options = [
-        'Reframe around opportunity, not risk or fear',
-        'Use simpler language, reads too technical',
-        'Make the hook stronger before the cutoff',
-        'The CTA is too generic, make it more specific',
-      ]
+    const parsed = AnalyzeOptionsSchema.safeParse(result.toolInput)
+    if (!parsed.success) {
+      logger.warn(
+        { route: 'posts.analyze', issues: parsed.error.issues },
+        'analyze tool output failed schema'
+      )
+      return apiError('INTERNAL_ERROR', 'Could not generate revision options')
     }
 
-    return NextResponse.json({ options })
+    return NextResponse.json({ options: parsed.data.options })
   } catch (err) {
     return toApiError(err, 'posts.analyze')
   }

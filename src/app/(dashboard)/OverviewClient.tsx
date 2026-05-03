@@ -89,19 +89,29 @@ export default function OverviewClient({
   const [pipeline, setPipeline] = useState<PipelineState>({ phase: 'idle' })
   const [stats, setStats] = useState(initialStats)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
-  const pollRef  = useRef<ReturnType<typeof setInterval> | null>(null)
+  const eventSourceRef = useRef<EventSource | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  function clearTimers() {
-    if (pollRef.current)  clearInterval(pollRef.current)
+  function clearWatchers() {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
     if (timerRef.current) clearInterval(timerRef.current)
   }
-  useEffect(() => () => clearTimers(), [])
+  useEffect(() => () => clearWatchers(), [])
 
   async function triggerPipeline() {
     setPipeline({ phase: 'running', runId: '', elapsed: 0 })
     const res = await fetch('/api/pipeline', { method: 'POST' })
-    if (!res.ok) { setPipeline({ phase: 'error', message: 'Failed to start pipeline.' }); return }
+    if (!res.ok) {
+      // 409 means another run is already in flight (singleton lock).
+      const msg = res.status === 409
+        ? 'A pipeline run is already in progress.'
+        : 'Failed to start pipeline.'
+      setPipeline({ phase: 'error', message: msg })
+      return
+    }
 
     const { runId } = await res.json()
     setPipeline({ phase: 'running', runId, elapsed: 0 })
@@ -110,21 +120,38 @@ export default function OverviewClient({
       setPipeline(prev => prev.phase === 'running' ? { ...prev, elapsed: prev.elapsed + 1 } : prev)
     }, 1000)
 
-    pollRef.current = setInterval(async () => {
+    // Subscribe to the SSE event stream. The server emits a `status` event on
+    // every status transition and closes the stream on terminal status.
+    const es = new EventSource(`/api/pipeline/${runId}/events`)
+    eventSourceRef.current = es
+
+    es.addEventListener('status', async (ev) => {
       try {
-        const data = await fetch(`/api/pipeline/${runId}`).then(r => r.json())
-        if (data.status === 'SUCCESS' || data.status === 'FAILED') {
-          clearTimers()
-          if (data.status === 'SUCCESS') {
-            setPipeline({ phase: 'done', postCount: data.postCount })
-            const s = await fetch('/api/stats')
-            if (s.ok) setStats(await s.json())
-          } else {
-            setPipeline({ phase: 'error', message: 'Pipeline failed. Click a node to see the log.' })
-          }
+        const { status } = JSON.parse((ev as MessageEvent).data) as { status: string }
+        if (status !== 'SUCCESS' && status !== 'FAILED') return
+        clearWatchers()
+
+        if (status === 'SUCCESS') {
+          // SSE doesn't carry postCount — fetch it once we know the run ended.
+          const data = await fetch(`/api/pipeline/${runId}`).then(r => r.json())
+          setPipeline({ phase: 'done', postCount: data.postCount ?? 0 })
+          const s = await fetch('/api/stats')
+          if (s.ok) setStats(await s.json())
+        } else {
+          setPipeline({ phase: 'error', message: 'Pipeline failed. Click a node to see the log.' })
         }
-      } catch { /* network blip */ }
-    }, 4000)
+      } catch {
+        /* parse error — ignore, terminal status will fire again or onerror handles it */
+      }
+    })
+
+    es.onerror = () => {
+      // Server closed the stream cleanly OR network drop. The status handler
+      // already cleared on terminal status; this handles abnormal disconnects.
+      if (es.readyState === EventSource.CLOSED) {
+        clearWatchers()
+      }
+    }
   }
 
   return (

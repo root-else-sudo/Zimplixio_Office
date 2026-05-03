@@ -6,14 +6,15 @@ import { useSession, signOut } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, FileText, Bot, CalendarDays,
-  LogOut, Bell, BellOff, Megaphone, Lightbulb,
+  LogOut, Bell, BellOff, Megaphone, Lightbulb, Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 import { clientEnv } from '@/lib/env-client'
 
 type NavItem = { href: string; label: string; icon: LucideIcon; disabled?: boolean }
+type NavGroup = { label: string; items: NavItem[]; adminOnly?: boolean }
 
-const navGroups: { label: string; items: NavItem[] }[] = [
+const navGroups: NavGroup[] = [
   {
     label: 'Marketing',
     items: [
@@ -28,6 +29,13 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { href: '/opportunities', label: 'Opportunities', icon: Lightbulb },
       { href: '#', label: 'More coming', icon: Megaphone, disabled: true },
+    ],
+  },
+  {
+    label: 'Admin',
+    adminOnly: true,
+    items: [
+      { href: '/admin/ai-usage', label: 'AI Usage', icon: Sparkles },
     ],
   },
 ]
@@ -103,7 +111,8 @@ export default function Sidebar() {
   }
 
   const userName = session?.user?.name ?? session?.user?.email ?? 'User'
-  const userRole = (session?.user as any)?.role ?? ''
+  const userRole = session?.user?.role ?? ''
+  const visibleGroups = navGroups.filter((g) => !g.adminOnly || userRole === 'ADMIN')
 
   return (
     <aside className="flex flex-col h-full w-64 shrink-0" style={{ background: 'var(--navy-900)' }}>
@@ -124,7 +133,7 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-5 space-y-5 overflow-y-auto">
-        {navGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.label}>
             <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.22)' }}>
               {group.label}
