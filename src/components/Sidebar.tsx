@@ -9,6 +9,7 @@ import {
   LogOut, Bell, BellOff, Megaphone, Lightbulb,
   type LucideIcon,
 } from 'lucide-react'
+import { clientEnv } from '@/lib/env-client'
 
 type NavItem = { href: string; label: string; icon: LucideIcon; disabled?: boolean }
 
@@ -31,7 +32,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   },
 ]
 
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
+const VAPID_PUBLIC_KEY = clientEnv.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)

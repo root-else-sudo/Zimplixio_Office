@@ -1,25 +1,42 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import Anthropic from '@anthropic-ai/sdk'
+import { withAuth } from '@/lib/rbac'
+import { rateLimit } from '@/lib/ratelimit'
+import { apiError, toApiError } from '@/lib/errors'
+import { anthropic, MODELS } from '@/lib/ai-client'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const ANALYZE_LIMIT = 30
+const ANALYZE_WINDOW_MS = 60 * 60 * 1000
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const POST = withAuth<{ id: string }>(async (_req, { params }, session) => {
+  const limit = await rateLimit({
+    scope: 'posts.analyze',
+    actor: session.user.id,
+    limit: ANALYZE_LIMIT,
+    windowMs: ANALYZE_WINDOW_MS,
+  })
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many analyze requests', code: 'RATE_LIMITED' },
+      {
+        status: 429,
+        headers: { 'Retry-After': Math.ceil(limit.retryAfterMs / 1000).toString() },
+      }
+    )
+  }
 
   const { id } = await params
   const post = await prisma.post.findUnique({ where: { id } })
-  if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!post) return apiError('NOT_FOUND', 'Post not found')
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 400,
-    messages: [
-      {
-        role: 'user',
-        content: `You are a content strategist for Zimplixio, a B2B SaaS company helping SMB owners with AI automation.
+  try {
+    const message = await anthropic.messages.create({
+      model: MODELS.PRIMARY,
+      max_tokens: 400,
+      messages: [
+        {
+          role: 'user',
+          content: `You are a content strategist for Zimplixio, a B2B SaaS company helping SMB owners with AI automation.
 
 Review this LinkedIn post draft and identify what's most likely off about it. Return exactly 4 short, specific options the reviewer could select to guide a rewrite. Each option should be a clear direction — not a description of the problem.
 
@@ -37,24 +54,27 @@ Examples of good options:
 - "Focus on a single clear insight, not multiple points"
 - "The CTA is too generic, make it more specific"
 - "Tone is too formal, needs to sound more conversational"`,
-      },
-    ],
-  })
+        },
+      ],
+    })
 
-  const raw = (message.content[0] as { type: string; text: string }).text.trim()
+    const raw = (message.content[0] as { type: string; text: string }).text.trim()
 
-  let options: string[]
-  try {
-    const match = raw.match(/\[[\s\S]*\]/)
-    options = JSON.parse(match ? match[0] : raw)
-  } catch {
-    options = [
-      'Reframe around opportunity, not risk or fear',
-      'Use simpler language, reads too technical',
-      'Make the hook stronger before the cutoff',
-      'The CTA is too generic, make it more specific',
-    ]
+    let options: string[]
+    try {
+      const match = raw.match(/\[[\s\S]*\]/)
+      options = JSON.parse(match ? match[0] : raw)
+    } catch {
+      options = [
+        'Reframe around opportunity, not risk or fear',
+        'Use simpler language, reads too technical',
+        'Make the hook stronger before the cutoff',
+        'The CTA is too generic, make it more specific',
+      ]
+    }
+
+    return NextResponse.json({ options })
+  } catch (err) {
+    return toApiError(err, 'posts.analyze')
   }
-
-  return NextResponse.json({ options })
-}
+})

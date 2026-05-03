@@ -1,108 +1,157 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { notifyDraftsReady } from '@/lib/notifications'
+import { serverEnv } from '@/lib/env'
+import { logger } from '@/lib/logger'
+import { withAuth } from '@/lib/rbac'
+import { toApiError } from '@/lib/errors'
+import { withTransaction } from '@/lib/db/tx'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
+import { readFile } from 'fs/promises'
 
 const execAsync = promisify(exec)
 
-const MARKETING_DIR = path.resolve(
-  process.env.MARKETING_DIR ?? '/Users/josephugaldeberrocal/Documents/Zimplixio_Marketing'
-)
-const PYTHON = path.join(MARKETING_DIR, '.venv/bin/python3')
+function marketingDir(): string {
+  if (!serverEnv.MARKETING_DIR) {
+    throw new Error('MARKETING_DIR is not configured for this service')
+  }
+  return path.resolve(serverEnv.MARKETING_DIR)
+}
 
 // Pipeline script order is the single source of truth in pipeline.config.json.
 // Never hardcode the list here — read it from the config so cron and dashboard stay in sync.
-function loadPipelineScripts(): string[] {
-  const fsSync = require('fs')
-  const configPath = path.join(MARKETING_DIR, 'pipeline.config.json')
-  const config = JSON.parse(fsSync.readFileSync(configPath, 'utf-8'))
+async function loadPipelineScripts(dir: string): Promise<string[]> {
+  const config = JSON.parse(await readFile(path.join(dir, 'pipeline.config.json'), 'utf-8'))
   return config.scripts as string[]
 }
 
-export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+export const POST = withAuth(
+  async () => {
+    let dir: string
+    try {
+      dir = marketingDir()
+    } catch (err) {
+      return toApiError(err, 'pipeline.start')
+    }
 
-  // Find or create the LinkedIn Posts agent
-  const agent = await prisma.agent.upsert({
-    where: { name: 'LinkedIn Posts' },
-    create: {
-      name: 'LinkedIn Posts',
-      description: 'Fetches newsletter emails and generates LinkedIn post drafts',
-      cronSchedule: '0 13 * * 2,4,5',  // Tue/Thu/Fri at 1 PM — matches run_pipeline.sh
-      scriptPath: 'run_pipeline.sh',
-    },
-    update: {},
-  })
+    const agent = await prisma.agent.upsert({
+      where: { name: 'LinkedIn Posts' },
+      create: {
+        name: 'LinkedIn Posts',
+        description: 'Fetches newsletter emails and generates LinkedIn post drafts',
+        cronSchedule: '0 13 * * 2,4,5',
+        scriptPath: 'run_pipeline.sh',
+      },
+      update: {},
+    })
 
-  const run = await prisma.pipelineRun.create({
-    data: { agentId: agent.id, status: 'RUNNING' },
-  })
+    const run = await prisma.pipelineRun.create({
+      data: { agentId: agent.id, status: 'RUNNING' },
+    })
 
-  // Run pipeline in background — don't await
-  runPipeline(run.id, agent.id).catch(console.error)
+    runPipeline(run.id, dir).catch((err) =>
+      logger.error({ err, runId: run.id }, 'pipeline crashed')
+    )
 
-  return NextResponse.json({ runId: run.id })
-}
+    return NextResponse.json({ runId: run.id })
+  },
+  { role: 'ADMIN' }
+)
 
-async function runPipeline(runId: string, agentId: string) {
+async function runPipeline(runId: string, dir: string) {
+  const python = path.join(dir, '.venv/bin/python3')
   const logs: string[] = []
   let failed = false
-  const PIPELINE_SCRIPTS = loadPipelineScripts()
 
-  for (const script of PIPELINE_SCRIPTS) {
+  let scripts: string[]
+  try {
+    scripts = await loadPipelineScripts(dir)
+  } catch (err) {
+    logger.error({ err, runId }, 'failed to load pipeline.config.json')
+    await prisma.pipelineRun.update({
+      where: { id: runId },
+      data: {
+        status: 'FAILED',
+        finishedAt: new Date(),
+        log: `[config] ERROR: ${(err as Error).message}`,
+      },
+    })
+    return
+  }
+
+  for (const script of scripts) {
     try {
-      const { stdout, stderr } = await execAsync(
-        `${PYTHON} ${path.join(MARKETING_DIR, script)}`,
-        { cwd: MARKETING_DIR }
-      )
+      const { stdout, stderr } = await execAsync(`${python} ${path.join(dir, script)}`, {
+        cwd: dir,
+      })
       logs.push(`[${script}]\n${stdout}${stderr}`)
-    } catch (err: any) {
-      logs.push(`[${script}] ERROR:\n${err.message}`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logs.push(`[${script}] ERROR:\n${msg}`)
       failed = true
       break
     }
   }
 
-  // Ingest generated posts from tmp/posts_draft.json into the DB
   let postCount = 0
+  let ingestFailed = false
   if (!failed) {
     try {
-      const fs = await import('fs/promises')
-      const draftsPath = path.join(MARKETING_DIR, 'tmp/posts_draft.json')
-      const drafts = JSON.parse(await fs.readFile(draftsPath, 'utf-8'))
+      const drafts: Array<Record<string, unknown>> = JSON.parse(
+        await readFile(path.join(dir, 'tmp/posts_draft.json'), 'utf-8')
+      )
 
-      for (const draft of drafts) {
-        await prisma.post.create({
+      // Atomic ingest: all posts + the run status update commit together. A
+      // partial failure rolls back so we never leave half-ingested drafts
+      // attached to a SUCCESS run.
+      postCount = await withTransaction(async (tx) => {
+        for (const draft of drafts) {
+          await tx.post.create({
+            data: {
+              runId,
+              newsletter: (draft.newsletter as string) ?? '',
+              sourceSubject: (draft.source_subject as string) ?? '',
+              sourceDate: draft.source_date
+                ? new Date(draft.source_date as string)
+                : new Date(),
+              content: (draft.post as string) ?? '',
+              status: 'DRAFT',
+            },
+          })
+        }
+        await tx.pipelineRun.update({
+          where: { id: runId },
           data: {
-            runId,
-            newsletter: draft.newsletter ?? '',
-            sourceSubject: draft.source_subject ?? '',
-            sourceDate: draft.source_date ? new Date(draft.source_date) : new Date(),
-            content: draft.post ?? '',
-            status: 'DRAFT',
+            status: 'SUCCESS',
+            finishedAt: new Date(),
+            log: logs.join('\n\n'),
           },
         })
-        postCount++
-      }
-    } catch (e: any) {
-      logs.push(`[ingest] ERROR: ${e.message}`)
+        return drafts.length
+      })
+    } catch (err) {
+      ingestFailed = true
+      const msg = err instanceof Error ? err.message : String(err)
+      logs.push(`[ingest] ERROR: ${msg}`)
+      logger.error({ err, runId }, 'pipeline ingest failed')
     }
   }
 
-  await prisma.pipelineRun.update({
-    where: { id: runId },
-    data: {
-      status: failed ? 'FAILED' : 'SUCCESS',
-      finishedAt: new Date(),
-      log: logs.join('\n\n'),
-    },
-  })
+  if (failed || ingestFailed) {
+    await prisma.pipelineRun.update({
+      where: { id: runId },
+      data: {
+        status: 'FAILED',
+        finishedAt: new Date(),
+        log: logs.join('\n\n'),
+      },
+    })
+    return
+  }
 
+  // Notify only after the tx commits, so we never message about drafts that
+  // rolled back.
   await notifyDraftsReady(postCount)
 }

@@ -1,21 +1,52 @@
-import { NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyTotpCode } from '@/lib/twilio'
+import { withAuth } from '@/lib/rbac'
+import { parseJson, z } from '@/lib/validate'
+import { apiError, toApiError } from '@/lib/errors'
+import { rateLimit } from '@/lib/ratelimit'
 
-export async function POST(req: Request) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+const VerifySchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+})
 
-  const { code } = await req.json()
-  const user = await prisma.user.findUnique({ where: { id: session.user.id } })
+const MFA_LIMIT = 5
+const MFA_WINDOW_MS = 15 * 60 * 1000
 
-  if (!user?.mfaSecret) {
-    return NextResponse.json({ error: 'MFA not configured' }, { status: 400 })
+export const POST = withAuth(async (req: NextRequest, _ctx, session) => {
+  const limit = await rateLimit({
+    scope: 'mfa.verify',
+    actor: session.user.id,
+    limit: MFA_LIMIT,
+    windowMs: MFA_WINDOW_MS,
+  })
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many attempts', code: 'RATE_LIMITED' },
+      {
+        status: 429,
+        headers: { 'Retry-After': Math.ceil(limit.retryAfterMs / 1000).toString() },
+      }
+    )
   }
 
-  const ok = await verifyTotpCode(session.user.id, user.mfaSecret, code)
-  if (!ok) return NextResponse.json({ error: 'Invalid code' }, { status: 400 })
+  const parsed = await parseJson(req, VerifySchema)
+  if (parsed instanceof NextResponse) return parsed
+  const { code } = parsed.data
 
-  return NextResponse.json({ ok: true })
-}
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+    })
+    if (!user?.mfaSecret) {
+      return apiError('VALIDATION_ERROR', 'MFA not configured')
+    }
+
+    const ok = await verifyTotpCode(session.user.id, user.mfaSecret, code)
+    if (!ok) return apiError('VALIDATION_ERROR', 'Invalid code')
+
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    return toApiError(err, 'mfa.verify')
+  }
+})

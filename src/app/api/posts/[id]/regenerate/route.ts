@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import Anthropic from '@anthropic-ai/sdk'
+import { withAuth } from '@/lib/rbac'
+import { rateLimit } from '@/lib/ratelimit'
+import { parseJson, z } from '@/lib/validate'
+import { apiError, toApiError } from '@/lib/errors'
+import { anthropic, MODELS } from '@/lib/ai-client'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const REGENERATE_LIMIT = 20
+const REGENERATE_WINDOW_MS = 60 * 60 * 1000
+
+const RegenerateSchema = z.object({
+  selectedOptions: z.array(z.string().max(200)).max(20).optional().default([]),
+  freeText: z.string().max(2_000).optional().default(''),
+})
 
 const SYSTEM_PROMPT = `You write LinkedIn posts for Zimplixio. Zimplixio helps small and medium businesses run better using technology — AI tools, e-commerce systems, data forecasting, and smarter workflows.
 
@@ -32,35 +41,51 @@ Outcome patterns to draw from (match to the post topic):
 
 Special angle — when topic is AI/automation: Zimplixio built its own content agent that monitors SMB trends and proposes posts daily. Every post is proof the system works. "We built ourselves an agent... this is what we build for clients."`
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const POST = withAuth<{ id: string }>(async (req: NextRequest, { params }, session) => {
+  const limit = await rateLimit({
+    scope: 'posts.regenerate',
+    actor: session.user.id,
+    limit: REGENERATE_LIMIT,
+    windowMs: REGENERATE_WINDOW_MS,
+  })
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many regenerate requests', code: 'RATE_LIMITED' },
+      {
+        status: 429,
+        headers: { 'Retry-After': Math.ceil(limit.retryAfterMs / 1000).toString() },
+      }
+    )
+  }
+
+  const parsed = await parseJson(req, RegenerateSchema)
+  if (parsed instanceof NextResponse) return parsed
+  const { selectedOptions, freeText } = parsed.data
 
   const { id } = await params
-  const body = await req.json()
-  const { selectedOptions, freeText } = body as { selectedOptions: string[]; freeText: string }
-
   const post = await prisma.post.findUnique({ where: { id } })
-  if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!post) return apiError('NOT_FOUND', 'Post not found')
 
   const feedbackParts: string[] = []
-  if (selectedOptions?.length) {
-    feedbackParts.push(`Feedback on what to change:\n${selectedOptions.map((o) => `- ${o}`).join('\n')}`)
+  if (selectedOptions.length) {
+    feedbackParts.push(
+      `Feedback on what to change:\n${selectedOptions.map((o) => `- ${o}`).join('\n')}`
+    )
   }
-  if (freeText?.trim()) {
+  if (freeText.trim()) {
     feedbackParts.push(`Additional direction from the reviewer:\n${freeText.trim()}`)
   }
-
   const feedback = feedbackParts.join('\n\n')
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 600,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: `Rewrite the following LinkedIn post based on the reviewer's feedback. Keep the same source topic but apply the direction given.
+  try {
+    const message = await anthropic.messages.create({
+      model: MODELS.PRIMARY,
+      max_tokens: 600,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: `Rewrite the following LinkedIn post based on the reviewer's feedback. Keep the same source topic but apply the direction given.
 
 Original post:
 """
@@ -70,11 +95,13 @@ ${post.content}
 ${feedback}
 
 Return only the rewritten post. No explanation, no title, no quotes around it.`,
-      },
-    ],
-  })
+        },
+      ],
+    })
 
-  const newContent = (message.content[0] as { type: string; text: string }).text.trim()
-
-  return NextResponse.json({ content: newContent })
-}
+    const newContent = (message.content[0] as { type: string; text: string }).text.trim()
+    return NextResponse.json({ content: newContent })
+  } catch (err) {
+    return toApiError(err, 'posts.regenerate')
+  }
+})

@@ -1,37 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { publishToLinkedIn } from '@/lib/linkedin'
+import { withAuth } from '@/lib/rbac'
+import { parseJson, z } from '@/lib/validate'
+import { apiError, toApiError } from '@/lib/errors'
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { id } = await params
-  const body = await req.json()
-  const { status, content } = body
-
-  const post = await prisma.post.update({
-    where: { id },
-    data: {
-      ...(status && { status }),
-      ...(content !== undefined && { content }),
-    },
+const PatchSchema = z
+  .object({
+    status: z.enum(['DRAFT', 'APPROVED', 'REJECTED', 'PUBLISHED']).optional(),
+    content: z.string().min(1).max(10_000).optional(),
+  })
+  .refine((v) => v.status !== undefined || v.content !== undefined, {
+    message: 'At least one of status or content is required',
   })
 
-  // Auto-publish to LinkedIn when a post is approved
-  if (status === 'APPROVED') {
-    publishToLinkedIn(post.content).catch(console.error)
-  }
+export const PATCH = withAuth<{ id: string }>(
+  async (req: NextRequest, { params }) => {
+    const parsed = await parseJson(req, PatchSchema)
+    if (parsed instanceof NextResponse) return parsed
+    const { status, content } = parsed.data
 
-  return NextResponse.json(post)
-}
+    const { id } = await params
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    try {
+      const post = await prisma.post.update({
+        where: { id },
+        data: {
+          ...(status && { status }),
+          ...(content !== undefined && { content }),
+        },
+      })
 
-  const { id } = await params
-  await prisma.post.delete({ where: { id } })
-  return NextResponse.json({ ok: true })
-}
+      if (status === 'APPROVED') {
+        publishToLinkedIn(post.content).catch((err) =>
+          console.error('[posts.publish]', err)
+        )
+      }
+
+      return NextResponse.json(post)
+    } catch (err) {
+      if (
+        err &&
+        typeof err === 'object' &&
+        'code' in err &&
+        (err as { code: string }).code === 'P2025'
+      ) {
+        return apiError('NOT_FOUND', 'Post not found')
+      }
+      return toApiError(err, 'posts.patch')
+    }
+  },
+  { role: 'ADMIN' }
+)
+
+export const DELETE = withAuth<{ id: string }>(
+  async (_req, { params }) => {
+    const { id } = await params
+    try {
+      await prisma.post.delete({ where: { id } })
+      return NextResponse.json({ ok: true })
+    } catch (err) {
+      if (
+        err &&
+        typeof err === 'object' &&
+        'code' in err &&
+        (err as { code: string }).code === 'P2025'
+      ) {
+        return apiError('NOT_FOUND', 'Post not found')
+      }
+      return toApiError(err, 'posts.delete')
+    }
+  },
+  { role: 'ADMIN' }
+)

@@ -120,3 +120,13 @@ model PushSubscription {
   auth      String
   createdAt DateTime @default(now())
 }
+
+// ─── Rate Limits ─────────────────────────────────────────────────────────────
+
+model RateLimit {
+  key         String   @id
+  count       Int
+  windowStart DateTime @default(now())
+
+  @@index([windowStart])
+}

@@ -1,42 +1,50 @@
-import { NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createTotpFactor, verifyTotpSetup } from '@/lib/twilio'
+import { withAuth } from '@/lib/rbac'
+import { parseJson, z } from '@/lib/validate'
+import { apiError, toApiError } from '@/lib/errors'
 
-export async function POST(req: Request) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+const SetupSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('create') }),
+  z.object({ action: z.literal('verify'), code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits') }),
+])
 
-  const body = await req.json()
+export const POST = withAuth(async (req: NextRequest, _ctx, session) => {
+  const parsed = await parseJson(req, SetupSchema)
+  if (parsed instanceof NextResponse) return parsed
+  const body = parsed.data
+
   const userId = session.user.id
 
-  // Step 1: create factor — returns binding uri for QR code
-  if (body.action === 'create') {
-    const factor = await createTotpFactor(userId, session.user.name ?? session.user.email!)
-    await prisma.user.update({
-      where: { id: userId },
-      data: { mfaSecret: factor.sid },
-    })
-    return NextResponse.json({
-      factorSid: factor.sid,
-      bindingUri: (factor.binding as any)?.uri,
-    })
-  }
+  try {
+    if (body.action === 'create') {
+      const factor = await createTotpFactor(
+        userId,
+        session.user.name ?? session.user.email ?? userId
+      )
+      await prisma.user.update({
+        where: { id: userId },
+        data: { mfaSecret: factor.sid },
+      })
+      return NextResponse.json({
+        factorSid: factor.sid,
+        bindingUri: (factor.binding as { uri?: string } | undefined)?.uri,
+      })
+    }
 
-  // Step 2: confirm with first code from authenticator app
-  if (body.action === 'verify') {
     const user = await prisma.user.findUnique({ where: { id: userId } })
-    if (!user?.mfaSecret) return NextResponse.json({ error: 'No factor found' }, { status: 400 })
+    if (!user?.mfaSecret) return apiError('VALIDATION_ERROR', 'No factor found')
 
     const ok = await verifyTotpSetup(userId, user.mfaSecret, body.code)
-    if (!ok) return NextResponse.json({ error: 'Invalid code' }, { status: 400 })
+    if (!ok) return apiError('VALIDATION_ERROR', 'Invalid code')
 
     await prisma.user.update({
       where: { id: userId },
       data: { mfaEnabled: true },
     })
     return NextResponse.json({ ok: true })
+  } catch (err) {
+    return toApiError(err, 'mfa.setup')
   }
-
-  return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
-}
+})
