@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
-    "worker": "tsx worker/src/index.ts"
+    "worker": "tsx worker/src/index.ts",
+    "backfill:post-versions": "tsx scripts/backfill-post-versions.ts",
+    "trigger:stale-check": "tsx scripts/trigger-stale-check.ts",
+    "test:whatsapp": "tsx scripts/test-whatsapp.ts"
   },
   "prisma": {
     "seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts"
@@ -17,8 +20,10 @@
     "@anthropic-ai/sdk": "0.92.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@types/diff": "^7.0.2",
     "@types/pg": "^8.20.0",
     "bcryptjs": "^3.0.3",
+    "diff": "^9.0.0",
     "execa": "^8.0.1",
     "lucide-react": "^1.14.0",
     "next": "16.2.4",

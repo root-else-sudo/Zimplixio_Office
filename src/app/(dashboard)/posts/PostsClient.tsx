@@ -1,7 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle, XCircle, Edit3, Save, X, RefreshCw, Loader2, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
+import {
+  CheckCircle, XCircle, Edit3, Save, X, RefreshCw, Loader2, AlertCircle,
+  History, Eye,
+} from 'lucide-react'
 
 type Post = {
   id: string
@@ -10,6 +14,11 @@ type Post = {
   sourceDate: string
   content: string
   status: string
+  approvedAt: string | null
+  approvedById: string | null
+  rejectedAt: string | null
+  rejectedById: string | null
+  rejectionReason: string | null
 }
 
 type RejectState = {
@@ -21,7 +30,13 @@ type RejectState = {
   newContent: string
 }
 
-export default function PostsClient({ posts: initial }: { posts: Post[] }) {
+export default function PostsClient({
+  posts: initial,
+  isAdmin,
+}: {
+  posts: Post[]
+  isAdmin: boolean
+}) {
   const [posts, setPosts] = useState(initial)
   const [editing, setEditing] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
@@ -188,6 +203,25 @@ export default function PostsClient({ posts: initial }: { posts: Post[] }) {
               )}
             </div>
 
+            {/* Audit line — visible to everyone, only when set */}
+            {(post.approvedAt || post.rejectedAt) && (
+              <div className="px-5 pt-2 text-xs text-gray-500">
+                {post.approvedAt && (
+                  <span>
+                    Approved {new Date(post.approvedAt).toLocaleString()}
+                    {post.approvedById && ` by ${post.approvedById.slice(0, 8)}`}
+                  </span>
+                )}
+                {post.rejectedAt && (
+                  <span>
+                    Rejected {new Date(post.rejectedAt).toLocaleString()}
+                    {post.rejectedById && ` by ${post.rejectedById.slice(0, 8)}`}
+                    {post.rejectionReason && ` — ${post.rejectionReason}`}
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50 rounded-b-xl">
               {editing === post.id ? (
                 <>
@@ -204,7 +238,7 @@ export default function PostsClient({ posts: initial }: { posts: Post[] }) {
                     <X className="w-3.5 h-3.5" /> Cancel
                   </button>
                 </>
-              ) : (
+              ) : isAdmin ? (
                 <>
                   {post.status === 'DRAFT' && (
                     <button
@@ -228,12 +262,30 @@ export default function PostsClient({ posts: initial }: { posts: Post[] }) {
                   >
                     <Edit3 className="w-3.5 h-3.5" /> Edit
                   </button>
+                  <Link
+                    href={`/posts/${post.id}/history`}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <History className="w-3.5 h-3.5" /> History
+                  </Link>
                   <button
                     onClick={() => startReject(post)}
                     className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors ml-auto"
                   >
                     <XCircle className="w-3.5 h-3.5" /> Reject
                   </button>
+                </>
+              ) : (
+                <>
+                  <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <Eye className="w-3.5 h-3.5" /> Read-only — only admins can edit or approve
+                  </span>
+                  <Link
+                    href={`/posts/${post.id}/history`}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors ml-auto"
+                  >
+                    <History className="w-3.5 h-3.5" /> History
+                  </Link>
                 </>
               )}
             </div>

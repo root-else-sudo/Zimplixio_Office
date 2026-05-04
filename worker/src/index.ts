@@ -5,13 +5,21 @@ import { startBoss, JOB_NAMES, type JobPayloads } from '@/lib/pgboss'
 import { logger } from '@/lib/logger'
 import { handlePipelineRun } from './handlers/pipeline'
 import { handleOpportunitiesFind } from './handlers/opportunities'
+import { handleLinkedInPublish } from './handlers/linkedin'
+import { handleStaleDraftsCheck } from './handlers/cron'
 
 async function main() {
   const boss = await startBoss()
 
-  // Register handlers. pg-boss serializes per-job-name by default; the
-  // singleton key on enqueue is what enforces "only one pipeline at a time"
-  // across the whole system.
+  // pg-boss v10 requires queues to exist before schedule() can reference them.
+  // createQueue is idempotent on existing queues, but parallel creates of
+  // distinct queues deadlock on a shared table lock — serialise the calls.
+  for (const name of Object.values(JOB_NAMES)) {
+    await boss.createQueue(name)
+  }
+
+  // pg-boss serializes per-job-name by default; the singleton key on enqueue
+  // is what enforces "only one pipeline at a time" across the whole system.
   await boss.work<JobPayloads[typeof JOB_NAMES.PIPELINE_RUN]>(
     JOB_NAMES.PIPELINE_RUN,
     async ([job]) => {
@@ -27,6 +35,26 @@ async function main() {
       await handleOpportunitiesFind(job.data)
     }
   )
+
+  await boss.work<JobPayloads[typeof JOB_NAMES.LINKEDIN_PUBLISH]>(
+    JOB_NAMES.LINKEDIN_PUBLISH,
+    async ([job]) => {
+      logger.info({ jobId: job.id, webhookId: job.data.webhookId }, 'linkedin.publish picked up')
+      await handleLinkedInPublish(job.data)
+    }
+  )
+
+  await boss.work<JobPayloads[typeof JOB_NAMES.STALE_DRAFTS_CHECK]>(
+    JOB_NAMES.STALE_DRAFTS_CHECK,
+    async ([job]) => {
+      logger.info({ jobId: job.id }, 'drafts.stale-check picked up')
+      await handleStaleDraftsCheck()
+    }
+  )
+
+  // Cron — every 6 hours. boss.schedule is idempotent: re-registering the same
+  // name updates the schedule rather than queuing duplicates.
+  await boss.schedule(JOB_NAMES.STALE_DRAFTS_CHECK, '0 */6 * * *', { triggered: 'cron' })
 
   logger.info('worker handlers registered, waiting for jobs')
 

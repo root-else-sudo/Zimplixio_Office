@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { serverEnv } from '@/lib/env'
 import { logger } from '@/lib/logger'
-import { notifyDraftsReady } from '@/lib/notifications'
+import { notifyDraftsReady, notifyPipelineFailed } from '@/lib/notifications'
 import type { PipelineRunPayload } from '@/lib/pgboss'
 
 const STEP_TIMEOUT_MS = 5 * 60 * 1000
@@ -47,6 +47,16 @@ async function logEvent(
   }
 }
 
+// Notification call that never throws — a Twilio/push outage shouldn't crash
+// the worker handler we're trying to finalise.
+async function safeNotifyFailed(runId: string, summary: string) {
+  try {
+    await notifyPipelineFailed(runId, summary)
+  } catch (err) {
+    logger.error({ err, runId }, 'pipeline-failed notification dispatch failed')
+  }
+}
+
 export async function handlePipelineRun(payload: PipelineRunPayload): Promise<void> {
   const { runId } = payload
   const log = logger.child({ runId, job: 'pipeline.run' })
@@ -55,12 +65,14 @@ export async function handlePipelineRun(payload: PipelineRunPayload): Promise<vo
   try {
     dir = marketingDir()
   } catch (err) {
+    const msg = (err as Error).message
     log.error({ err }, 'pipeline aborted: MARKETING_DIR not set')
     await prisma.pipelineRun.update({
       where: { id: runId },
       data: { status: 'FAILED', finishedAt: new Date() },
     })
-    await logEvent(runId, 'config', 'failed', { error: (err as Error).message })
+    await logEvent(runId, 'config', 'failed', { error: msg })
+    await safeNotifyFailed(runId, msg)
     return
   }
 
@@ -73,12 +85,14 @@ export async function handlePipelineRun(payload: PipelineRunPayload): Promise<vo
     )
     scripts = config.scripts
   } catch (err) {
+    const msg = (err as Error).message
     log.error({ err }, 'failed to load pipeline.config.json')
     await prisma.pipelineRun.update({
       where: { id: runId },
       data: { status: 'FAILED', finishedAt: new Date() },
     })
-    await logEvent(runId, 'config', 'failed', { error: (err as Error).message })
+    await logEvent(runId, 'config', 'failed', { error: msg })
+    await safeNotifyFailed(runId, msg)
     return
   }
 
@@ -129,6 +143,7 @@ export async function handlePipelineRun(payload: PipelineRunPayload): Promise<vo
       step: failedStep,
       error: failureMessage,
     })
+    await safeNotifyFailed(runId, `Step ${failedStep}: ${failureMessage}`)
     return
   }
 
@@ -143,7 +158,7 @@ export async function handlePipelineRun(payload: PipelineRunPayload): Promise<vo
 
     postCount = await prisma.$transaction(async (tx) => {
       for (const draft of drafts) {
-        await tx.post.create({
+        const post = await tx.post.create({
           data: {
             runId,
             newsletter: draft.newsletter,
@@ -151,6 +166,15 @@ export async function handlePipelineRun(payload: PipelineRunPayload): Promise<vo
             sourceDate: draft.source_date ? new Date(draft.source_date) : new Date(),
             content: draft.post,
             status: 'DRAFT',
+          },
+        })
+        // Audit: snapshot the original generated content as v1.
+        await tx.postVersion.create({
+          data: {
+            postId: post.id,
+            version: 1,
+            content: draft.post,
+            source: 'ORIGINAL',
           },
         })
       }
@@ -170,6 +194,7 @@ export async function handlePipelineRun(payload: PipelineRunPayload): Promise<vo
       data: { status: 'FAILED', finishedAt: new Date() },
     })
     await logEvent(runId, 'ingest', 'failed', { error: msg })
+    await safeNotifyFailed(runId, `Ingest: ${msg}`)
     return
   }
 

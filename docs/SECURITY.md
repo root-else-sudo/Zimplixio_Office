@@ -61,7 +61,7 @@ The path to a stricter CSP is a nonce-based middleware pattern that drops `'unsa
 ## Known gaps (deferred)
 
 - **No signup or password-reset flow.** Acceptable while the site is single-user; users are seeded via `prisma/seed.ts`. Adding teammates today requires DB access. Build-out is part of any future onboarding work.
-- **`mfaVerified` token lifetime.** The flag flips to `true` only on the verify call and lives until the JWT rotates. NextAuth does not refresh it, so a stolen JWT remains MFA-verified for the token's lifetime. Mitigation: keep `NEXTAUTH_SECRET` private and rotate periodically; consider re-verification on sensitive admin actions in a later phase.
+- **`mfaVerified` token lifetime.** After `/api/mfa/verify` succeeds, the verify-mfa page calls `useSession().update({ mfaVerified: true })` which re-issues the JWT cookie via the `jwt` callback's `update` trigger (see `src/lib/auth.config.ts`). The flag then lives for the rest of the JWT's lifetime — NextAuth does not auto-expire MFA verification, so a stolen JWT remains MFA-verified until the cookie itself expires. Mitigation: keep `NEXTAUTH_SECRET` private and rotate periodically; consider re-verification on sensitive admin actions in a later phase.
 - **No password strength enforcement.** The seed script and any future signup must enforce a minimum policy (length ≥ 12, mixed character classes). Not urgent at single-user scale.
 - **No audit log of admin actions.** Phase 5 of the foundation roadmap adds approval audit fields and a `Webhook` outbox. Until then, only application logs (Phase 2 introduces structured logging via `pino`) record who did what.
 - **CSP is report-only.** Will be flipped to enforcing once we confirm no console violations in normal use.

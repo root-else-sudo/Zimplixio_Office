@@ -6,6 +6,8 @@ import { logger } from './logger'
 export const JOB_NAMES = {
   PIPELINE_RUN: 'pipeline.run',
   OPPORTUNITIES_FIND: 'opportunities.find',
+  LINKEDIN_PUBLISH: 'linkedin.publish',
+  STALE_DRAFTS_CHECK: 'drafts.stale-check',
 } as const
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES]
@@ -20,9 +22,20 @@ export interface OpportunitiesFindPayload {
   triggeredByUserId: string
 }
 
+export interface LinkedInPublishPayload {
+  webhookId: string
+}
+
+export interface StaleDraftsCheckPayload {
+  // Cron-driven; payload is empty but typed so the dispatch path stays uniform.
+  triggered: 'cron'
+}
+
 export interface JobPayloads {
   [JOB_NAMES.PIPELINE_RUN]: PipelineRunPayload
   [JOB_NAMES.OPPORTUNITIES_FIND]: OpportunitiesFindPayload
+  [JOB_NAMES.LINKEDIN_PUBLISH]: LinkedInPublishPayload
+  [JOB_NAMES.STALE_DRAFTS_CHECK]: StaleDraftsCheckPayload
 }
 
 const globalForBoss = globalThis as unknown as { boss?: PgBoss }

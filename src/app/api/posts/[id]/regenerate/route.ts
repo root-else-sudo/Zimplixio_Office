@@ -80,7 +80,33 @@ export const POST = withAuth<{ id: string }>(async (req: NextRequest, { params }
       return apiError('INTERNAL_ERROR', 'Could not generate rewritten post')
     }
 
-    return NextResponse.json({ content: validated.data.content })
+    // Audit: every regeneration is captured as a candidate version, even if
+    // the reviewer later discards it. The PATCH that adopts a candidate writes
+    // its own EDITED row.
+    const candidate = await prisma.$transaction(async (tx) => {
+      const latest = await tx.postVersion.findFirst({
+        where: { postId: post.id },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      })
+      const nextVersion = (latest?.version ?? 0) + 1
+      return tx.postVersion.create({
+        data: {
+          postId: post.id,
+          version: nextVersion,
+          content: validated.data.content,
+          source: 'REGENERATED',
+          createdBy: session.user.id,
+          feedback: { selectedOptions, freeText: freeText.trim() || null },
+        },
+      })
+    })
+
+    return NextResponse.json({
+      content: validated.data.content,
+      versionId: candidate.id,
+      version: candidate.version,
+    })
   } catch (err) {
     return toApiError(err, 'posts.regenerate')
   }

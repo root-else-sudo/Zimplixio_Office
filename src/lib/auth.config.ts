@@ -7,13 +7,24 @@ export const authConfig: NextAuthConfig = {
   },
   session: { strategy: 'jwt' },
   callbacks: {
-    jwt({ token, user }) {
+    jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id as string
         token.role = (user as any).role
         token.mfaEnabled = (user as any).mfaEnabled
         token.mfaSecret = (user as any).mfaSecret
         token.mfaVerified = false
+      }
+      // Allow client-side useSession().update({ mfaVerified, mfaEnabled }) to
+      // re-issue the JWT with refreshed flags. Without this, /api/mfa/verify
+      // succeeds but the cookie keeps mfaVerified=false → middleware loop.
+      if (trigger === 'update' && session && typeof session === 'object') {
+        if ('mfaVerified' in session && typeof session.mfaVerified === 'boolean') {
+          token.mfaVerified = session.mfaVerified
+        }
+        if ('mfaEnabled' in session && typeof session.mfaEnabled === 'boolean') {
+          token.mfaEnabled = session.mfaEnabled
+        }
       }
       return token
     },

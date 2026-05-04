@@ -86,16 +86,29 @@ enum RunStatus {
 // ─── Posts ───────────────────────────────────────────────────────────────────
 
 model Post {
-  id            String     @id @default(cuid())
-  runId         String
-  run           PipelineRun @relation(fields: [runId], references: [id])
-  newsletter    String
-  sourceSubject String
-  sourceDate    DateTime
-  content       String
-  status        PostStatus @default(DRAFT)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id                   String      @id @default(cuid())
+  runId                String
+  run                  PipelineRun @relation(fields: [runId], references: [id])
+  newsletter           String
+  sourceSubject        String
+  sourceDate           DateTime
+  content              String
+  status               PostStatus  @default(DRAFT)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  // Audit trail (Phase 5).
+  approvedById         String?
+  approvedAt           DateTime?
+  rejectedById         String?
+  rejectedAt           DateTime?
+  rejectionReason      String?
+
+  versions  PostVersion[]
+  webhooks  Webhook[]
+
+  @@index([status])
+  @@index([createdAt])
 }
 
 enum PostStatus {
@@ -103,6 +116,62 @@ enum PostStatus {
   APPROVED
   REJECTED
   PUBLISHED
+}
+
+// Immutable history of states the post has been in. v1 is always the
+// pipeline-generated original. Each regenerate/edit appends a new row; the
+// live Post.content is the latest accepted state.
+model PostVersion {
+  id        String           @id @default(cuid())
+  postId    String
+  post      Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
+  version   Int
+  content   String
+  source    PostVersionSource
+  // Free-form metadata. For REGENERATED rows: { selectedOptions, freeText }.
+  feedback  Json?
+  // userId of the actor that produced this version (null for ORIGINAL).
+  createdBy String?
+  createdAt DateTime         @default(now())
+
+  @@unique([postId, version])
+  @@index([postId, createdAt])
+}
+
+enum PostVersionSource {
+  ORIGINAL
+  REGENERATED
+  EDITED
+}
+
+// Outbox-pattern record for any side-effect that should be retryable and
+// observable. Phase 5 uses it for LinkedIn publishes; future kinds slot in
+// without schema changes.
+model Webhook {
+  id          String        @id @default(cuid())
+  kind        WebhookKind
+  status      WebhookStatus @default(PENDING)
+  payload     Json
+  attempts    Int           @default(0)
+  lastError   String?
+  postId      String?
+  post        Post?         @relation(fields: [postId], references: [id], onDelete: SetNull)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deliveredAt DateTime?
+
+  @@index([status, kind])
+  @@index([createdAt])
+}
+
+enum WebhookKind {
+  LINKEDIN_PUBLISH
+}
+
+enum WebhookStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────

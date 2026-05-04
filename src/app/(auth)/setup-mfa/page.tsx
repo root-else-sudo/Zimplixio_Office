@@ -2,10 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { ShieldCheck, Loader2, CheckCircle } from 'lucide-react'
 
 export default function SetupMfaPage() {
   const router = useRouter()
+  const { update } = useSession()
   const [step, setStep] = useState<'idle' | 'qr' | 'verify' | 'done'>('idle')
   const [qrUrl, setQrUrl] = useState('')
   const [factorSid, setFactorSid] = useState('')
@@ -46,6 +48,9 @@ export default function SetupMfaPage() {
     if (!res.ok) {
       setError(data.error ?? 'Invalid code, try again')
     } else {
+      // The DB now has mfaEnabled=true; refresh the JWT so the cookie agrees.
+      // Mark the session as verified too — they literally just proved the factor.
+      await update({ mfaEnabled: true, mfaVerified: true })
       setStep('done')
       setTimeout(() => router.push('/'), 2000)
     }

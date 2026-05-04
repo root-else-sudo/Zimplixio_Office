@@ -38,3 +38,12 @@ export function enqueueOpportunitiesFind(
     singletonKey: JOB_NAMES.OPPORTUNITIES_FIND,
   })
 }
+
+export function enqueueLinkedInPublish(
+  payload: JobPayloads[typeof JOB_NAMES.LINKEDIN_PUBLISH]
+) {
+  // Outbox-pattern: pg-boss handles the retry envelope; the worker handler
+  // updates Webhook.attempts/lastError and finalises Webhook.status. We allow
+  // a few retries for transient API errors; persistent failures end up FAILED.
+  return enqueue(JOB_NAMES.LINKEDIN_PUBLISH, payload, { retryLimit: 3 })
+}

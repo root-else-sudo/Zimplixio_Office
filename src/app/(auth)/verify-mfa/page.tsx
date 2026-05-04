@@ -2,10 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { ShieldCheck } from 'lucide-react'
 
 export default function VerifyMfaPage() {
   const router = useRouter()
+  const { update } = useSession()
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -28,6 +30,9 @@ export default function VerifyMfaPage() {
       return
     }
 
+    // Re-issue the JWT cookie with mfaVerified=true BEFORE navigating —
+    // otherwise middleware reads the stale cookie and bounces us back here.
+    await update({ mfaVerified: true })
     router.push('/')
     router.refresh()
   }
