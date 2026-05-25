@@ -9,16 +9,18 @@ A Next.js dashboard that serves as the control center for Zimplixio's marketing 
 - Delivers notifications via WhatsApp (Twilio) and browser push
 
 ## How It Connects to Zimplixio_Marketing
-The dashboard calls Python scripts that live in the `Zimplixio_Marketing` project. The connection is configured via the `MARKETING_DIR` environment variable (defaults to `/Users/josephugaldeberrocal/Documents/Zimplixio_Marketing`). The `/api/pipeline` route spawns those scripts as child processes and reads `tmp/posts_draft.json` to ingest results into PostgreSQL. The `/api/opportunities` POST route similarly calls `opportunities_find.py`.
+The dashboard triggers Python scripts that live in the `Zimplixio_Marketing` project. In production (`PIPELINE_USE_QUEUE=true`) the web service enqueues a pg-boss job; the Worker service clones the marketing repo at startup and handles those jobs, spawning Python scripts as child processes and writing results to PostgreSQL. In local dev (`PIPELINE_USE_QUEUE=false`) the web API route spawns scripts directly. The connection is configured via `MARKETING_DIR` (set to `/Users/josephugaldeberrocal/Documents/Zimplixio_Marketing` locally; set to `/app/marketing` automatically by the worker's `start-worker.sh`).
 
 ## Tech Stack
 - **Framework**: Next.js App Router (server + client components)
 - **Language**: TypeScript (strict mode)
 - **Database**: PostgreSQL via Prisma ORM
+- **Job queue**: pg-boss (pipeline, LinkedIn publish, opportunities, stale-draft cron)
 - **Auth**: NextAuth v5 (credentials + TOTP MFA)
 - **Styles**: Tailwind CSS + custom Soft UI design system in `src/app/globals.css`
 - **Charts**: Recharts
 - **Notifications**: Twilio WhatsApp + Web Push (VAPID)
+- **Deployment**: Railway — two services (`Zimplixio_Office` web + `Worker`) sharing one Postgres addon
 
 ## Architecture Pattern
 Server components fetch data from Prisma and pass it as serialized props to `*Client.tsx` client components. Never call Prisma directly from client components. API routes handle all mutations and pipeline triggers. The pattern is:
@@ -46,12 +48,6 @@ PATH="$HOME/.nvm/versions/node/v20.20.2/bin:$PATH" arch -x86_64 npx tsc --noEmit
 ```
 The `validator.ts` warning is a stale `.next/types` artifact — safe to ignore, clears on next full build.
 
-### Database commands
-```bash
-npx prisma migrate dev --name <description>   # apply schema changes
-npx prisma generate                           # regenerate client after schema edit
-npx prisma studio                             # visual DB browser
-```
 
 ## Rules
 1. **Always run TypeScript check after changes** — `tsc --noEmit` before declaring done
@@ -59,22 +55,15 @@ npx prisma studio                             # visual DB browser
 3. **Prisma schema is the single source of truth** — run `prisma migrate dev` after any model change
 4. **Never hardcode MARKETING_DIR** — always use the env var
 5. **No posts go live without explicit user action** — the dashboard shows drafts; the user approves
+6. **Use lazy initialization for SDK clients** — never call `new Anthropic()`, `twilio()`, or `webpush.setVapidDetails()` at module level. `next build` runs module-level code without env vars injected, causing crashes. Wrap in a lazy getter called at request time.
 
 ## Key Environment Variables
+
+See `docs/ENV.md` for the full reference. Vars that affect code behavior:
 
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
-| `NEXTAUTH_URL` | Auth callback base URL (e.g. `http://localhost:3000`) |
-| `NEXTAUTH_SECRET` | NextAuth signing secret |
+| `PIPELINE_USE_QUEUE` | `false` (dev, inline subprocess) / `true` (prod, pg-boss worker) |
 | `MARKETING_DIR` | Absolute path to Zimplixio_Marketing project root |
-| `ANTHROPIC_API_KEY` | Claude API — used by marketing Python scripts |
-| `TAVILY_API_KEY` | Tavily search — used by marketing Python scripts |
-| `TWILIO_ACCOUNT_SID` | Twilio account identifier |
-| `TWILIO_AUTH_TOKEN` | Twilio auth token |
-| `TWILIO_WHATSAPP_FROM` | Must be `whatsapp:+14155238886` (Twilio sandbox number) |
-| `TWILIO_VERIFY_SERVICE_SID` | Twilio Verify service for TOTP MFA |
-| `WHATSAPP_NOTIFY_TO` | Recipient WhatsApp number (must have opted into sandbox) |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web push public key |
-| `VAPID_PRIVATE_KEY` | Web push private key |
-| `VAPID_EMAIL` | Web push contact email |
+| `AUTH_TRUST_HOST` | Set to `1` in production — required behind Cloudflare proxy |

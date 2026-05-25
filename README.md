@@ -2,6 +2,8 @@
 
 The control center for Zimplixio's marketing operations. A Next.js dashboard that orchestrates AI-powered content pipelines, surfaces business opportunities, and manages project work — all with a human-in-the-loop approval layer before anything goes live.
 
+**Live:** `https://crm.zimplixio.com`
+
 ## What it does
 
 | Section | Purpose |
@@ -22,11 +24,11 @@ zimplixio-office (this repo)          Zimplixio_Marketing (Python repo)
 ─────────────────────────────         ──────────────────────────────────
 Next.js app + pg-boss worker    ←───  Python pipeline scripts
 Prisma / PostgreSQL                   Gmail API, Tavily, Claude
-Railway: office-web service           MARKETING_DIR env var points here
-Railway: office-worker service
+Railway: Zimplixio_Office service     MARKETING_DIR env var points here
+Railway: Worker service
 ```
 
-The worker service (separate Railway service, built from `Dockerfile.worker`) clones the marketing repo at startup, runs the Python scripts as child processes, validates their JSON output with Zod, and writes results to the database. The two repos communicate **only through the database and job queue** — never through the filesystem in production.
+The Worker service (separate Railway service, built from `Dockerfile.worker`) clones the marketing repo at startup, runs the Python scripts as child processes, validates their JSON output with Zod, and writes results to the database. The two repos communicate **only through the database and job queue** — never through the filesystem in production.
 
 ### Page pattern
 
@@ -42,14 +44,14 @@ Server components fetch from Prisma and pass serialized data to client component
 
 ## Tech stack
 
-- **Framework**: Next.js 16 App Router (TypeScript, strict mode)
+- **Framework**: Next.js App Router (TypeScript, strict mode)
 - **Database**: PostgreSQL via Prisma ORM
 - **Job queue**: pg-boss (pipeline runs, LinkedIn publish, opportunities)
 - **Auth**: NextAuth v5 — credentials + TOTP MFA
 - **Styles**: Tailwind CSS v4 + Soft UI design system
 - **Charts**: Recharts
 - **Notifications**: Twilio WhatsApp + Web Push (VAPID)
-- **Deployment**: Railway (two services: `office-web` + `office-worker`)
+- **Deployment**: Railway (two services: `Zimplixio_Office` + `Worker`)
 
 ## Local setup
 
@@ -80,7 +82,6 @@ Copy `.env.example` to `.env` and fill in values. Required variables:
 | `NEXTAUTH_SECRET` | Any random string (`openssl rand -base64 48`) |
 | `MARKETING_DIR` | Absolute path to `Zimplixio_Marketing` repo root |
 | `ANTHROPIC_API_KEY` | Claude API key |
-| `TAVILY_API_KEY` | Tavily search API key |
 | `TWILIO_ACCOUNT_SID` | Twilio account |
 | `TWILIO_AUTH_TOKEN` | Twilio auth token |
 | `TWILIO_VERIFY_SERVICE_SID` | Twilio Verify (TOTP MFA) |
@@ -89,6 +90,8 @@ Copy `.env.example` to `.env` and fill in values. Required variables:
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web push public key |
 | `VAPID_PRIVATE_KEY` | Web push private key |
 | `VAPID_EMAIL` | Web push contact email |
+
+See `docs/ENV.md` for the full variable reference including worker-only vars.
 
 ### 3. Set up the database
 
@@ -119,21 +122,24 @@ npx prisma studio            # visual DB browser
 
 ## Deployment (Railway)
 
-Two services in the same Railway project:
+Two services in the same Railway project, sharing one Postgres addon:
 
 | Service | Build | Start |
 |---|---|---|
-| `office-web` | Railpack (auto-detected Next.js) | `npm run start` |
-| `office-worker` | `Dockerfile.worker` | `/start-worker.sh` |
+| `Zimplixio_Office` | Railpack (auto-detected Next.js) | `npm run start` |
+| `Worker` | `Dockerfile.worker` | `/start-worker.sh` |
 
-The worker startup script (`scripts/start-worker.sh`) clones `Zimplixio_Marketing`, creates a Python venv, installs from `requirements.txt`, and starts the worker process.
+The worker startup script (`scripts/start-worker.sh`) clones `Zimplixio_Marketing` at `MARKETING_REPO_REF`, creates a Python venv, installs from `requirements.txt`, and starts the worker process.
 
-**Release command** on `office-web`:
+**Database migrations** are applied manually from your local machine (not as a Railway release command):
+
+```bash
+DATABASE_URL="<Railway DATABASE_PUBLIC_URL>" npx prisma migrate deploy
 ```
-npx prisma migrate deploy
-```
 
-See the master plan for the full Railway setup walkthrough and the complete environment variable tables for both services.
+Use `DATABASE_PUBLIC_URL` from the Postgres service variables (the internal hostname won't resolve from outside Railway).
+
+See `docs/RAILWAY.md` for the full setup guide, DNS configuration, and environment variable tables.
 
 ## Agent architecture
 

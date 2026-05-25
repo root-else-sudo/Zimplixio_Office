@@ -1,24 +1,25 @@
 # Railway deployment topology
 
-After Phase 4, the project deploys as **two Railway services in one project**, sharing one Postgres add-on. The web service handles HTTP and enqueues jobs; the worker service consumes jobs and runs the Python pipeline.
+The project deploys as **two Railway services in one project**, sharing one Postgres addon.
 
 ```
 ┌─────────────────────────────┐         ┌─────────────────────────────┐
-│  Service: office-web        │         │  Service: office-worker     │
+│  Service: Zimplixio_Office  │         │  Service: Worker            │
 │  (Next.js, this repo)       │         │  (Node + Python, this repo) │
 │                             │         │                             │
-│  npm run start              │         │  npm run worker             │
+│  Railpack builder           │         │  Dockerfile.worker          │
+│  npm run start              │         │  scripts/start-worker.sh    │
 │                             │         │                             │
-│  - HTTP API + UI            │         │  - pg-boss handlers         │
-│  - Enqueues pg-boss jobs    │         │  - Spawns Marketing Python  │
-│  - Reads PipelineEvent      │         │  - Writes PipelineEvent     │
-│    rows for SSE             │         │    rows                     │
+│  - HTTP API + UI            │         │  - Clones Zimplixio_Marketing│
+│  - Enqueues pg-boss jobs    │         │  - pg-boss job handlers     │
+│  - Reads PipelineEvent      │         │  - Spawns Python scripts    │
+│    rows for live progress   │         │  - Writes PipelineEvent rows│
 └──────────────┬──────────────┘         └──────────────┬──────────────┘
                │                                        │
                └─────────────┬──────────────────────────┘
                              ▼
                   ┌─────────────────────┐
-                  │  Postgres add-on    │
+                  │  Postgres addon     │
                   │  (shared)           │
                   │                     │
                   │  - public schema    │
@@ -28,130 +29,102 @@ After Phase 4, the project deploys as **two Railway services in one project**, s
                   └─────────────────────┘
 ```
 
-**Why a separate worker service.** A web deploy on Railway restarts the Next.js process — every push would interrupt in-flight pipeline jobs if the queue worker lived in the same process. The worker also runs Python subprocesses that need their own memory budget and lifecycle. Splitting the services means:
+**Live URLs**
+- Web: `https://crm.zimplixio.com` (custom domain via Cloudflare CNAME)
+- Railway internal: `zimplixiooffice-production.up.railway.app`
 
-- web deploys never interrupt running pipelines
-- worker can be scaled and restarted independently
-- the worker image bundles the Marketing Python repo without bloating the web image
-- web dyno stays small / cheap
-
-**`src/instrumentation.ts` does NOT call `boss.start()`** — the web service only enqueues; it never consumes.
-
-## Service: `office-web`
+## Service: `Zimplixio_Office` (web)
 
 ### Build
 
-Default Railway Node detection works. `npm run build` → `npm run start`.
+Railpack auto-detects Next.js. No custom build command needed. `railway.toml` sets the builder to NIXPACKS — no `startCommand` (Railpack detects `npm run start` automatically).
 
-### Required env vars
+### Key env vars
 
-These must be set on the web service (use Railway's `${{Postgres.DATABASE_URL}}` reference variable for the DB):
-
-| Variable | Source |
+| Variable | Value |
 |---|---|
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
-| `NEXTAUTH_URL` | `https://<your-railway-domain>` |
-| `NEXTAUTH_SECRET` | Generate with `openssl rand -base64 48` |
+| `NEXTAUTH_URL` | `https://crm.zimplixio.com` |
+| `NEXTAUTH_SECRET` | 32+ char random string |
+| `AUTH_TRUST_HOST` | `1` — required when running behind Cloudflare proxy |
+| `PIPELINE_USE_QUEUE` | `true` — enqueues jobs to pg-boss worker |
 | `ANTHROPIC_API_KEY` | Anthropic console |
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID` | Twilio console |
-| `TWILIO_WHATSAPP_FROM`, `WHATSAPP_NOTIFY_TO` | See `docs/ENV.md` |
-| `VAPID_EMAIL`, `VAPID_PRIVATE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Generate with `npx web-push generate-vapid-keys` |
+| `TWILIO_*`, `WHATSAPP_*` | Twilio console |
+| `VAPID_*`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web push keys |
 | `LOG_LEVEL` | `info` |
-| `PIPELINE_USE_QUEUE` | `false` initially → flip to `true` after the worker is verified |
 
-`MARKETING_DIR` is **not required** on the web service in Phase 4 — the legacy fallback path is gated behind `PIPELINE_USE_QUEUE=false` and we recommend deploying with the flag on.
+Full variable list in `docs/ENV.md`.
 
-### SSE through Railway's proxy
+### Cloudflare DNS
 
-The `/api/pipeline/[runId]/events` route uses Server-Sent Events. The implementation already includes:
+Two records on `zimplixio.com`:
+- `CNAME www.crm → 2juecpif.up.railway.app` (Proxied)  ← unused (3rd-level SSL issue)
+- `CNAME crm → 2juecpif.up.railway.app` (Proxied) ← active
+- `TXT _railway-verify.www.crm → railway-verify=...` (DNS only)
 
-- `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no` headers
-- 25-second `:keepalive` heartbeats to prevent idle disconnects
-- 30-minute hard timeout per stream
+SSL/TLS mode: **Full** (not Flexible).
 
-If Railway introduces aggressive proxy timeouts in the future, the heartbeat interval is in [src/app/api/pipeline/[runId]/events/route.ts](../src/app/api/pipeline/[runId]/events/route.ts) (`HEARTBEAT_INTERVAL_MS`).
+`AUTH_TRUST_HOST=1` is required because Cloudflare sits in front of Railway — NextAuth v5 rejects requests from untrusted hosts without it.
 
-## Service: `office-worker`
+### Database migration
+
+Migrations are applied manually via local CLI (not as a Railway release command):
+
+```bash
+DATABASE_URL="<Railway public URL>" npx prisma migrate deploy
+```
+
+Use `DATABASE_PUBLIC_URL` from the Postgres service variables (not `DATABASE_URL` which is the private hostname).
+
+## Service: `Worker`
 
 ### Build
 
-Same repo, different start command. Configure on Railway:
+Uses `Dockerfile.worker` at repo root. Set in Railway → Settings → Build → Dockerfile path: `Dockerfile.worker`.
 
-- **Start command:** `npm run worker`
-- **Builder:** Nixpacks (or use a custom Dockerfile if Python deps grow — see below)
+No start command override needed — the Dockerfile `CMD ["/start-worker.sh"]` runs automatically (do not set a custom start command in Railway UI, as `railway.toml` would override it).
 
-### Bundling the Marketing Python pipeline
+### Startup sequence (`scripts/start-worker.sh`)
 
-The worker spawns Python via `MARKETING_DIR/.venv/bin/python3`. On Railway, this directory must exist inside the worker container. Two approaches:
-
-**Recommended: clone Marketing at a pinned SHA via custom Dockerfile.**
-
-Create `worker/Dockerfile` (not yet committed — add when first deploying):
-
-```dockerfile
-FROM node:20-bookworm
-
-# Marketing Python deps
-RUN apt-get update && apt-get install -y python3 python3-venv python3-pip git \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-# Clone Marketing at a pinned commit. MARKETING_REPO_REF is a build-time arg
-# you set per deploy.
-ARG MARKETING_REPO_REF=main
-RUN git clone https://github.com/<your-org>/Zimplixio_Marketing.git /app/marketing \
-    && cd /app/marketing \
-    && git checkout "$MARKETING_REPO_REF" \
-    && python3 -m venv .venv \
-    && .venv/bin/pip install -r requirements.txt
-
-# Office worker
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY . .
-
-ENV MARKETING_DIR=/app/marketing
-CMD ["npm", "run", "worker"]
-```
-
-To bump the Marketing repo: change `MARKETING_REPO_REF` in Railway service vars and redeploy. **Pin SHAs, not branches** — branches drift silently.
+1. Removes any stale `/app/marketing` directory
+2. Clones `Zimplixio_Marketing` at `MARKETING_REPO_REF` (default: `master`) using `GITHUB_TOKEN`
+3. Creates Python venv, installs `requirements.txt`
+4. Sets `MARKETING_DIR=/app/marketing`
+5. Runs `npm run worker` (pg-boss worker process)
 
 ### Required env vars
 
-| Variable | Source |
+All web service vars plus:
+
+| Variable | Value |
 |---|---|
-| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (same DB as web) |
-| `MARKETING_DIR` | `/app/marketing` (or wherever the Dockerfile clones it) |
-| `ANTHROPIC_API_KEY` | Anthropic console (needed if Marketing scripts call Claude) |
-| `TWILIO_*`, `WHATSAPP_*`, `VAPID_*` | Same as web — worker fires `notifyDraftsReady` |
-| `LINKEDIN_*` | When LinkedIn publish moves to the worker (Phase 5) |
-| `LOG_LEVEL` | `info` |
-| `NEXTAUTH_URL`, `NEXTAUTH_SECRET` | Required by `serverEnv` schema even though the worker doesn't auth requests. Set them to dummy-but-valid values (e.g. the same as web) until the env schema is split per-service. |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Same as web — `clientEnv` is parsed when `notifications.ts` loads |
+| `GITHUB_TOKEN` | GitHub PAT with `repo` read scope, no expiration |
+| `GITHUB_REPO_PATH` | `root-else-sudo/Zimplixio_Marketing` |
+| `MARKETING_REPO_REF` | `master` |
+| `TAVILY_API_KEY` | Tavily console — **pending** |
+| `GMAIL_CLIENT_ID` | From `credentials.json` — **pending** |
+| `GMAIL_CLIENT_SECRET` | From `credentials.json` — **pending** |
+| `GMAIL_REFRESH_TOKEN_READONLY` | From `token.json` — **pending** |
+| `GMAIL_REFRESH_TOKEN_MODIFY` | From `token_modify.json` — **pending** (requires local run first) |
+| `R2_ACCOUNT_ID` | Cloudflare R2 — **pending** |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 — **pending** |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 — **pending** |
+| `R2_BUCKET_NAME` | Cloudflare R2 — **pending** |
+
+Items marked **pending** are required for the full pipeline (Gmail fetch + R2 market context cache). Without them the worker starts but pipeline jobs will fail at the Gmail auth step.
 
 ### Sizing
 
-Pipeline runs spawn Python sub-processes that load LLM clients and process JSON. Start with the smallest worker plan that has at least 1 GB RAM. Monitor and bump if pipelines OOM.
-
-## Cutover procedure
-
-1. Deploy worker service with `PIPELINE_USE_QUEUE=false` on the web service. The worker is idle, no jobs are flowing.
-2. Run `npm run worker` locally against the Railway Postgres (with the production `DATABASE_URL`) to verify pg-boss can connect and migrate its schema. **Or** just deploy the worker; pg-boss will migrate on first start.
-3. On the web service, set `PIPELINE_USE_QUEUE=true` and redeploy.
-4. Trigger a pipeline run from the dashboard. Watch the worker logs — you should see `pipeline.run picked up` followed by step-by-step events.
-5. If anything goes wrong: set `PIPELINE_USE_QUEUE=false` on the web and redeploy. The legacy in-request path resumes.
+Pipeline runs spawn Python subprocesses loading LLM clients and processing JSON. Minimum 1 GB RAM recommended.
 
 ## Rollback
 
-Setting `PIPELINE_USE_QUEUE=false` on the web service is the one-click rollback. The worker can keep running idle (no cost beyond the dyno). The `pgboss` schema and `PipelineEvent` table are additive and safe to leave in place.
+Set `PIPELINE_USE_QUEUE=false` on the web service — reverts to the legacy in-request subprocess path. The worker stays running idle (no cost beyond the dyno).
 
 ## Local development
-
-The worker runs locally too:
 
 ```bash
 npm run worker
 ```
 
-It uses your local `DATABASE_URL` and `MARKETING_DIR`. To test the queue path without spinning up the worker, leave `PIPELINE_USE_QUEUE=false` in your local `.env`.
+Uses local `DATABASE_URL` and `MARKETING_DIR`. Keep `PIPELINE_USE_QUEUE=false` in `.env` to run without the worker.
