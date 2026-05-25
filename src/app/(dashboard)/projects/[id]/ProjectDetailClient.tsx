@@ -66,6 +66,89 @@ function StatusIcon({ status }: { status: string }) {
   return <Clock className="w-4 h-4 text-gray-400" />
 }
 
+// ── Gantt custom list columns ─────────────────────────────────────────────────
+
+const STATUS_SHORT: Record<string, { label: string; cls: string }> = {
+  TODO:             { label: 'Not Started', cls: 'bg-gray-100 text-gray-500' },
+  IN_PROGRESS:      { label: 'In Progress',  cls: 'bg-indigo-50 text-indigo-600' },
+  DONE:             { label: 'Completed',    cls: 'bg-emerald-50 text-emerald-600' },
+  BLOCKED:          { label: 'Blocked',      cls: 'bg-red-50 text-red-500' },
+  PENDING_APPROVAL: { label: 'Pending',      cls: 'bg-amber-50 text-amber-600' },
+}
+
+function makeListHeader(rowWidth: string) {
+  return function GanttListHeader({ headerHeight }: { headerHeight: number }) {
+    return (
+      <div
+        className="flex items-end border-b border-gray-100 bg-white"
+        style={{ height: headerHeight }}
+      >
+        <div style={{ width: rowWidth }} className="px-4 pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider truncate">
+          Task
+        </div>
+        <div className="w-28 shrink-0 px-3 pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+          Status
+        </div>
+      </div>
+    )
+  }
+}
+
+function makeListTable(rowWidth: string, statusMap: Record<string, string>) {
+  return function GanttListTable({
+    rowHeight, tasks, selectedTaskId, setSelectedTask, onExpanderClick,
+  }: {
+    rowHeight: number
+    rowWidth: string
+    tasks: GanttTask[]
+    selectedTaskId: string
+    setSelectedTask: (id: string) => void
+    onExpanderClick: (t: GanttTask) => void
+    locale: string
+  }) {
+    return (
+      <div>
+        {tasks.map(t => {
+          const isProject = t.type === 'project'
+          const status = statusMap[t.id]
+          const s = STATUS_SHORT[status]
+          const isSelected = t.id === selectedTaskId
+          return (
+            <div
+              key={t.id}
+              className={`flex items-center border-b border-gray-50 cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}
+              style={{ height: rowHeight }}
+              onClick={() => !isProject && setSelectedTask(t.id)}
+            >
+              <div style={{ width: rowWidth }} className="flex items-center gap-1.5 px-4 min-w-0">
+                {isProject && (
+                  <button
+                    onClick={e => { e.stopPropagation(); onExpanderClick(t) }}
+                    className="shrink-0 text-gray-400 hover:text-gray-600"
+                  >
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                )}
+                {!isProject && <span className="w-3 shrink-0" />}
+                <span className={`truncate text-xs ${isProject ? 'font-semibold text-gray-700' : 'text-gray-600'}`}>
+                  {t.name}
+                </span>
+              </div>
+              <div className="w-28 shrink-0 px-3">
+                {!isProject && s && (
+                  <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-md truncate max-w-full ${s.cls}`}>
+                    {s.label}
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+}
+
 function dbToGantt(project: DBProject): GanttTask[] {
   const tasks: GanttTask[] = []
 
@@ -140,6 +223,12 @@ export default function ProjectDetailClient({
   const pendingCount = allTasks.filter(t => t.status === 'PENDING_APPROVAL').length
 
   const ganttTasks = dbToGantt(project)
+
+  const taskStatusMap = Object.fromEntries(
+    project.phases.flatMap(p => p.tasks.map(t => [t.id, t.status]))
+  )
+  const GanttListHeader = makeListHeader('200px')
+  const GanttListTable = makeListTable('200px', taskStatusMap)
 
   const refreshProject = useCallback(async () => {
     const res = await fetch(`/api/projects/${project.id}`)
@@ -269,6 +358,8 @@ export default function ProjectDetailClient({
               arrowColor="#6366f1"
               fontFamily="inherit"
               fontSize="12px"
+              TaskListHeader={GanttListHeader}
+              TaskListTable={GanttListTable}
             />
           )}
         </div>
