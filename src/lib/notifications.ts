@@ -5,11 +5,16 @@ import { serverEnv } from './env'
 import { clientEnv } from './env-client'
 import { logger } from './logger'
 
-webpush.setVapidDetails(
-  `mailto:${serverEnv.VAPID_EMAIL}`,
-  clientEnv.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-  serverEnv.VAPID_PRIVATE_KEY
-)
+let vapidReady = false
+function ensureVapid() {
+  if (vapidReady) return
+  webpush.setVapidDetails(
+    `mailto:${serverEnv.VAPID_EMAIL}`,
+    clientEnv.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    serverEnv.VAPID_PRIVATE_KEY
+  )
+  vapidReady = true
+}
 
 // Shared dispatch — WhatsApp + web push to every registered subscriber. Kept
 // fire-and-forget per channel: a Twilio outage shouldn't block push and vice
@@ -17,6 +22,7 @@ webpush.setVapidDetails(
 // the Twilio SID + status so dispatches stay visible without needing to
 // re-instrument the worker on every "did the message go out?" question.
 async function dispatch(title: string, body: string) {
+  ensureVapid()
   try {
     const message = await sendWhatsApp(`${title}: ${body}`)
     logger.info(

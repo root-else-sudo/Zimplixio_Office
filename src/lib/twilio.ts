@@ -1,10 +1,14 @@
 import twilio from 'twilio'
 import { serverEnv } from './env'
 
-const client = twilio(serverEnv.TWILIO_ACCOUNT_SID, serverEnv.TWILIO_AUTH_TOKEN)
+let _client: ReturnType<typeof twilio> | null = null
+function getClient() {
+  if (!_client) _client = twilio(serverEnv.TWILIO_ACCOUNT_SID, serverEnv.TWILIO_AUTH_TOKEN)
+  return _client
+}
 
 export async function sendWhatsApp(message: string) {
-  return client.messages.create({
+  return getClient().messages.create({
     from: serverEnv.TWILIO_WHATSAPP_FROM,
     to: serverEnv.WHATSAPP_NOTIFY_TO,
     body: message,
@@ -12,7 +16,7 @@ export async function sendWhatsApp(message: string) {
 }
 
 export async function createTotpFactor(userId: string, userName: string) {
-  const factor = await client.verify.v2
+  const factor = await getClient().verify.v2
     .services(serverEnv.TWILIO_VERIFY_SERVICE_SID)
     .entities(userId)
     .newFactors.create({
@@ -23,7 +27,7 @@ export async function createTotpFactor(userId: string, userName: string) {
 }
 
 export async function verifyTotpSetup(userId: string, factorSid: string, code: string) {
-  const factor = await client.verify.v2
+  const factor = await getClient().verify.v2
     .services(serverEnv.TWILIO_VERIFY_SERVICE_SID)
     .entities(userId)
     .factors(factorSid)
@@ -32,7 +36,7 @@ export async function verifyTotpSetup(userId: string, factorSid: string, code: s
 }
 
 export async function verifyTotpCode(userId: string, factorSid: string, code: string) {
-  const challenge = await client.verify.v2
+  const challenge = await getClient().verify.v2
     .services(serverEnv.TWILIO_VERIFY_SERVICE_SID)
     .entities(userId)
     .challenges.create({

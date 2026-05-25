@@ -5,8 +5,12 @@ import { logger } from './logger'
 import { prisma } from './prisma'
 import { computeCostUsd, type UsageCounts } from './ai/cost'
 
-// Singleton Anthropic SDK client.
-export const anthropic = new Anthropic({ apiKey: serverEnv.ANTHROPIC_API_KEY })
+// Lazy singleton — never instantiated at module load (build time serverEnv is empty).
+let _anthropic: Anthropic | null = null
+function getAnthropic(): Anthropic {
+  if (!_anthropic) _anthropic = new Anthropic({ apiKey: serverEnv.ANTHROPIC_API_KEY })
+  return _anthropic
+}
 
 // Centralised model catalogue. Switching providers/versions becomes a one-line
 // change and call sites get autocomplete instead of magic strings.
@@ -88,7 +92,7 @@ export async function callClaude(opts: CallClaudeOptions): Promise<ClaudeRespons
   let errorCode: string | undefined
 
   try {
-    response = await pRetry(() => anthropic.messages.create(params), {
+    response = await pRetry(() => getAnthropic().messages.create(params), {
       retries: 3,
       minTimeout: 500,
       maxTimeout: 5_000,
