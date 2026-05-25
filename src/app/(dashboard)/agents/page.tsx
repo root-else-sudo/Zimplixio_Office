@@ -19,6 +19,11 @@ export default async function AgentsPage() {
     }),
   ])
 
+  const STALE_MS = 30 * 60 * 1000
+  const isStale = lastRun?.status === 'RUNNING' &&
+    Date.now() - new Date(lastRun.startedAt).getTime() > STALE_MS
+  const effectiveStatus = isStale ? 'FAILED' : (lastRun?.status ?? '')
+
   return (
     <div className="p-7 md:p-10 max-w-6xl mx-auto space-y-7">
       <div>
@@ -29,7 +34,7 @@ export default async function AgentsPage() {
       </div>
 
       <PipelineFlow
-        overallStatus={lastRun?.status ?? ''}
+        overallStatus={effectiveStatus}
         log={lastRun?.log ?? ''}
         startedAt={lastRun?.startedAt ? JSON.parse(JSON.stringify(lastRun.startedAt)) : null}
         finishedAt={lastRun?.finishedAt ? JSON.parse(JSON.stringify(lastRun.finishedAt)) : null}

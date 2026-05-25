@@ -6,6 +6,14 @@ import {
   FileCode2, Filter, Mail,
 } from 'lucide-react'
 
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+function formatRunDate(iso: string): string {
+  const d = new Date(iso)
+  const h = d.getHours(), m = d.getMinutes().toString().padStart(2, '0')
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${h % 12 || 12}:${m} ${ampm}`
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type NodeStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped'
@@ -324,11 +332,7 @@ export default function PipelineFlow({
               >
                 {recentRuns.map(r => (
                   <option key={r.id} value={r.id}>
-                    {new Date(r.startedAt).toLocaleString('en-US', {
-                      month: 'short', day: 'numeric',
-                      hour: '2-digit', minute: '2-digit',
-                    })}
-                    {' — '}{r.status}
+                    {formatRunDate(r.startedAt)}{' — '}{r.status}
                   </option>
                 ))}
               </select>

@@ -270,3 +270,13 @@ textarea:focus {
   animation: flowDot 1.35s ease-in-out infinite;
   pointer-events: none;
 }
+
+/* ── Gantt chart overrides ── */
+.gantt-wrapper ._CZjuD { font-family: inherit; }
+.gantt-wrapper ._WuQ0f { background: #fff; border-bottom: 1px solid #f3f4f6; }
+.gantt-wrapper ._34SS0 { fill: #f9fafb; }
+.gantt-wrapper ._9w8d5 { stroke: #e5e7eb; }
+.gantt-wrapper ._RZ5Sm { background: rgba(99,102,241,0.06); border-radius: 6px; }
+.gantt-wrapper ._2dZTy { fill: #6366f1; }
+.gantt-wrapper ._1rLuZ { font-size: 11px; fill: #6b7280; }
+.gantt-wrapper ._3T42e { fill: #374151; font-size: 12px; }

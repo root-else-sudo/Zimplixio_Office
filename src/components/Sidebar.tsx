@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, FileText, Bot, CalendarDays,
   LogOut, Bell, BellOff, Megaphone, Lightbulb, Sparkles,
+  FolderKanban,
   type LucideIcon,
 } from 'lucide-react'
 import { clientEnv } from '@/lib/env-client'
@@ -29,6 +30,12 @@ const navGroups: NavGroup[] = [
     items: [
       { href: '/opportunities', label: 'Opportunities', icon: Lightbulb },
       { href: '#', label: 'More coming', icon: Megaphone, disabled: true },
+    ],
+  },
+  {
+    label: 'Workspace',
+    items: [
+      { href: '/projects', label: 'Projects', icon: FolderKanban },
     ],
   },
   {
