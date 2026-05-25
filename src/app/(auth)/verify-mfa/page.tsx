@@ -30,11 +30,11 @@ export default function VerifyMfaPage() {
       return
     }
 
-    // Re-issue the JWT cookie with mfaVerified=true BEFORE navigating —
-    // otherwise middleware reads the stale cookie and bounces us back here.
+    // Re-issue the JWT cookie with mfaVerified=true, then hard-navigate so
+    // the middleware always reads the fresh cookie. Client-side router.push
+    // can race against the cookie write in production behind a proxy.
     await update({ mfaVerified: true })
-    router.push('/')
-    router.refresh()
+    window.location.replace('/')
   }
 
   return (
