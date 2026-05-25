@@ -1,10 +1,10 @@
 import pino from 'pino'
 import { serverEnv } from './env'
 
-const isDev = serverEnv.NODE_ENV !== 'production'
+const isDev = (serverEnv.NODE_ENV ?? 'production') !== 'production'
 
 export const logger = pino({
-  level: serverEnv.LOG_LEVEL,
+  level: serverEnv.LOG_LEVEL ?? 'info',
   base: { service: 'zimplixio-office' },
   redact: {
     paths: [
