@@ -53,5 +53,11 @@ function parseOrThrow<T>(schema: z.ZodSchema<T>, source: NodeJS.ProcessEnv, labe
   return result.data
 }
 
-export const serverEnv = parseOrThrow(ServerSchema, process.env, 'server')
+// During `next build` env vars are not injected — skip validation so the
+// build can complete. The real validation runs at server startup (runtime).
+export const serverEnv =
+  process.env.NEXT_PHASE === 'phase-production-build'
+    ? ({} as z.infer<typeof ServerSchema>)
+    : parseOrThrow(ServerSchema, process.env, 'server')
+
 export type ServerEnv = typeof serverEnv

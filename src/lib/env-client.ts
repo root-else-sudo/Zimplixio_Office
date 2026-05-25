@@ -13,12 +13,14 @@ const result = ClientSchema.safeParse({
   NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
 })
 
-if (!result.success) {
+// During `next build` NEXT_PUBLIC_ vars may not be injected — skip throwing
+// so the build completes. Missing vars will be caught at runtime.
+if (!result.success && process.env.NEXT_PHASE !== 'phase-production-build') {
   const issues = result.error.issues
     .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
     .join('\n')
   throw new Error(`Invalid client environment configuration:\n${issues}`)
 }
 
-export const clientEnv = result.data
+export const clientEnv = (result.data ?? {}) as z.infer<typeof ClientSchema>
 export type ClientEnv = typeof clientEnv
