@@ -7,12 +7,12 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY package*.json .npmrc ./
+COPY prisma ./prisma
 RUN npm ci
 
 COPY tsconfig.json ./
 COPY worker ./worker
 COPY src ./src
-COPY prisma ./prisma
 
 COPY scripts/start-worker.sh /start-worker.sh
 RUN chmod +x /start-worker.sh
