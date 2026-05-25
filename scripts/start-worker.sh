@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+rm -rf /app/marketing
+
 echo "[worker] Cloning Zimplixio_Marketing @ ${MARKETING_REPO_REF:-main}..."
 git clone \
   --depth 1 \
