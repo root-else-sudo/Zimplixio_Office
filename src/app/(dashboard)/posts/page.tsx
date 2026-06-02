@@ -29,6 +29,7 @@ export default async function PostsPage() {
     <PostsClient
       posts={JSON.parse(JSON.stringify(posts))}
       isAdmin={session.user.role === 'ADMIN'}
+      approverName={session.user.name ?? null}
     />
   )
 }

@@ -33,9 +33,11 @@ type RejectState = {
 export default function PostsClient({
   posts: initial,
   isAdmin,
+  approverName,
 }: {
   posts: Post[]
   isAdmin: boolean
+  approverName: string | null
 }) {
   const [posts, setPosts] = useState(initial)
   const [editing, setEditing] = useState<string | null>(null)
@@ -209,7 +211,7 @@ export default function PostsClient({
                 {post.approvedAt && (
                   <span>
                     Approved {new Date(post.approvedAt).toLocaleString()}
-                    {post.approvedById && ` by ${post.approvedById.slice(0, 8)}`}
+                    {post.approvedById && ` by ${approverName ?? post.approvedById.slice(0, 8)}`}
                   </span>
                 )}
                 {post.rejectedAt && (
