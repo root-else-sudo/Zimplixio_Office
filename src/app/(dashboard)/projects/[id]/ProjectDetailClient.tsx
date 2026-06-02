@@ -94,9 +94,14 @@ function makeListHeader(rowWidth: string) {
   }
 }
 
-function makeListTable(rowWidth: string, statusMap: Record<string, string>) {
+function makeListTable(
+  rowWidth: string,
+  statusMap: Record<string, string>,
+  onSelectTask: (id: string) => void,
+  activeTaskId: string | null,
+) {
   return function GanttListTable({
-    rowHeight, tasks, selectedTaskId, setSelectedTask, onExpanderClick,
+    rowHeight, tasks, setSelectedTask, onExpanderClick,
   }: {
     rowHeight: number
     rowWidth: string
@@ -112,13 +117,17 @@ function makeListTable(rowWidth: string, statusMap: Record<string, string>) {
           const isProject = t.type === 'project'
           const status = statusMap[t.id]
           const s = STATUS_SHORT[status]
-          const isSelected = t.id === selectedTaskId
+          const isSelected = t.id === activeTaskId
           return (
             <div
               key={t.id}
               className={`flex items-center border-b border-gray-50 cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}
               style={{ height: rowHeight }}
-              onClick={() => !isProject && setSelectedTask(t.id)}
+              onClick={() => {
+                if (isProject) { onExpanderClick(t); return }
+                setSelectedTask(t.id)
+                onSelectTask(t.id)
+              }}
             >
               <div style={{ width: rowWidth }} className="flex items-center gap-1.5 px-4 min-w-0">
                 {isProject && (
@@ -228,7 +237,7 @@ export default function ProjectDetailClient({
     project.phases.flatMap(p => p.tasks.map(t => [t.id, t.status]))
   )
   const GanttListHeader = makeListHeader('200px')
-  const GanttListTable = makeListTable('200px', taskStatusMap)
+  const GanttListTable = makeListTable('200px', taskStatusMap, setSelectedTaskId, selectedTaskId)
 
   const refreshProject = useCallback(async () => {
     const res = await fetch(`/api/projects/${project.id}`)
