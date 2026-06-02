@@ -130,15 +130,6 @@ const STEPS: StepDef[] = [
     logMarker: 'posts_generate',
   },
   {
-    key: 'posts_save',
-    label: 'Save',
-    sublabel: 'PostgreSQL',
-    description: 'Ingests the generated draft posts into the database and saves markdown files organized by date.',
-    inputOutput: 'In: posts_draft.json → Out: Database (DRAFT status)',
-    icon: <PostgresIcon size={28} />,
-    logMarker: 'posts_save',
-  },
-  {
     key: 'emails_organize',
     label: 'Organize',
     sublabel: 'Gmail labels',
