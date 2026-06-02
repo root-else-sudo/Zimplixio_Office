@@ -8,6 +8,9 @@ function getClient() {
 }
 
 export async function sendSMS(message: string) {
+  if (!serverEnv.TWILIO_SMS_FROM || !serverEnv.SMS_NOTIFY_TO) {
+    throw new Error('SMS not configured: TWILIO_SMS_FROM and SMS_NOTIFY_TO are required')
+  }
   return getClient().messages.create({
     from: serverEnv.TWILIO_SMS_FROM,
     to: serverEnv.SMS_NOTIFY_TO,
