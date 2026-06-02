@@ -7,10 +7,10 @@ function getClient() {
   return _client
 }
 
-export async function sendWhatsApp(message: string) {
+export async function sendSMS(message: string) {
   return getClient().messages.create({
-    from: serverEnv.TWILIO_WHATSAPP_FROM,
-    to: serverEnv.WHATSAPP_NOTIFY_TO,
+    from: serverEnv.TWILIO_SMS_FROM,
+    to: serverEnv.SMS_NOTIFY_TO,
     body: message,
   })
 }

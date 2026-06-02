@@ -1,6 +1,6 @@
 import webpush from 'web-push'
 import { prisma } from './prisma'
-import { sendWhatsApp } from './twilio'
+import { sendSMS } from './twilio'
 import { serverEnv } from './env'
 import { clientEnv } from './env-client'
 import { logger } from './logger'
@@ -24,7 +24,7 @@ function ensureVapid() {
 async function dispatch(title: string, body: string) {
   ensureVapid()
   try {
-    const message = await sendWhatsApp(`${title}: ${body}`)
+    const message = await sendSMS(`${title}: ${body}`)
     logger.info(
       { sid: message.sid, twilioStatus: message.status, title },
       'whatsapp dispatched'

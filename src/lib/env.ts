@@ -18,10 +18,8 @@ const ServerSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().min(1),
   TWILIO_AUTH_TOKEN: z.string().min(1),
   TWILIO_VERIFY_SERVICE_SID: z.string().min(1),
-  TWILIO_WHATSAPP_FROM: z
-    .string()
-    .startsWith('whatsapp:', 'TWILIO_WHATSAPP_FROM must start with "whatsapp:"'),
-  WHATSAPP_NOTIFY_TO: z.string().min(1),
+  TWILIO_SMS_FROM: z.string().min(1),
+  SMS_NOTIFY_TO: z.string().min(1),
 
   VAPID_EMAIL: z.string().email('VAPID_EMAIL must be an email'),
   VAPID_PRIVATE_KEY: z.string().min(1),

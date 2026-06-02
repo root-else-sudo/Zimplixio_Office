@@ -29,11 +29,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ runI
     }
   }
 
+  // run.log is deprecated since Phase 4 — the worker now writes structured
+  // PipelineEvent records. Build a synthetic log from events so PipelineFlow
+  // can determine per-step status during and after a run.
+  let log = run.log ?? ''
+  if (!log) {
+    const events = await prisma.pipelineEvent.findMany({
+      where: { runId },
+      orderBy: { createdAt: 'asc' },
+    })
+    const parts: string[] = []
+    for (const e of events) {
+      if (e.eventType === 'started' && e.stepName.startsWith('execution/')) {
+        const marker = e.stepName.replace('execution/', '').replace('.py', '')
+        parts.push(`[${marker}]`)
+      } else if (e.eventType === 'stdout' || e.eventType === 'stderr') {
+        const payload = e.payload as { line?: string }
+        if (payload?.line) parts.push(payload.line)
+      }
+    }
+    log = parts.join('\n')
+  }
+
   return NextResponse.json({
     status: run.status,
     postCount: run._count.posts,
     startedAt: run.startedAt,
     finishedAt: run.finishedAt,
-    log: run.log ?? '',
+    log,
   })
 }
