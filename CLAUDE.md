@@ -8,6 +8,17 @@ A Next.js dashboard that serves as the control center for Zimplixio's marketing 
 - Surfaces AI-generated business opportunities (Tavily + Claude)
 - Delivers notifications via WhatsApp (Twilio) and browser push
 
+## Production Status (as of 2026-06-01)
+
+Both services are live and operational:
+- **Web:** `https://crm.zimplixio.com` (Cloudflare → Railway, SSL Full)
+- **Worker:** Railway `Worker` service, clones `Zimplixio_Marketing@master` at startup, runs pipeline jobs via pg-boss
+- **Pipeline:** end-to-end verified — Gmail fetch → parse → filter → context → generate → save → organize
+- **Gmail OAuth:** app published to Production in Google Cloud Console (no 7-day token expiry)
+- **R2:** bucket `zimplixio-marketing` in Cloudflare, used for `market_context.json` caching
+
+---
+
 ## How It Connects to Zimplixio_Marketing
 The dashboard triggers Python scripts that live in the `Zimplixio_Marketing` project. In production (`PIPELINE_USE_QUEUE=true`) the web service enqueues a pg-boss job; the Worker service clones the marketing repo at startup and handles those jobs, spawning Python scripts as child processes and writing results to PostgreSQL. In local dev (`PIPELINE_USE_QUEUE=false`) the web API route spawns scripts directly. The connection is configured via `MARKETING_DIR` (set to `/Users/josephugaldeberrocal/Documents/Zimplixio_Marketing` locally; set to `/app/marketing` automatically by the worker's `start-worker.sh`).
 

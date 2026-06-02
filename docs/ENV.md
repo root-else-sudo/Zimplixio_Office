@@ -45,17 +45,17 @@ Every secret and external path is validated **once at boot** through Zod schemas
 | `GITHUB_TOKEN` | yes | `start-worker.sh` | GitHub PAT with `repo` read scope, no expiration |
 | `GITHUB_REPO_PATH` | yes | `start-worker.sh` | `root-else-sudo/Zimplixio_Marketing` |
 | `MARKETING_REPO_REF` | yes | `start-worker.sh` | Branch/tag to clone — currently `master` |
-| `TAVILY_API_KEY` | yes | `context_search.py` | Tavily console — **pending** |
-| `GMAIL_CLIENT_ID` | yes | `gmail_auth.py` | From Google Cloud `credentials.json` — **pending** |
-| `GMAIL_CLIENT_SECRET` | yes | `gmail_auth.py` | From Google Cloud `credentials.json` — **pending** |
-| `GMAIL_REFRESH_TOKEN_READONLY` | yes | `emails_fetch.py` | From `token.json` after local OAuth run — **pending** |
-| `GMAIL_REFRESH_TOKEN_MODIFY` | yes | `emails_organize.py` | From `token_modify.json` after local OAuth run — **pending** |
-| `R2_ACCOUNT_ID` | yes | `r2_storage.py` | Cloudflare R2 — **pending** |
-| `R2_ACCESS_KEY_ID` | yes | `r2_storage.py` | Cloudflare R2 API token — **pending** |
-| `R2_SECRET_ACCESS_KEY` | yes | `r2_storage.py` | Cloudflare R2 — **pending** |
-| `R2_BUCKET_NAME` | yes | `r2_storage.py` | Cloudflare R2 bucket name — **pending** |
+| `TAVILY_API_KEY` | yes | `context_search.py` | Tavily console |
+| `GMAIL_CLIENT_ID` | yes | `gmail_auth.py` | From Google Cloud `credentials.json` |
+| `GMAIL_CLIENT_SECRET` | yes | `gmail_auth.py` | From Google Cloud `credentials.json` |
+| `GMAIL_REFRESH_TOKEN_READONLY` | yes | `emails_fetch.py` | From `token.json` after local OAuth run — regenerate if `invalid_grant` |
+| `GMAIL_REFRESH_TOKEN_MODIFY` | yes | `emails_organize.py` | From `token_modify.json` after local OAuth run — regenerate if `invalid_grant` |
+| `R2_ACCOUNT_ID` | yes | `r2_storage.py` | Cloudflare account ID (`0d653500d8aa8a059d729920b21141ed`) |
+| `R2_ACCESS_KEY_ID` | yes | `r2_storage.py` | Cloudflare R2 API token (Account API token, not `cfat_` Cloudflare token) |
+| `R2_SECRET_ACCESS_KEY` | yes | `r2_storage.py` | Cloudflare R2 |
+| `R2_BUCKET_NAME` | yes | `r2_storage.py` | `zimplixio-marketing` |
 
-> **Note:** Items marked **pending** are required for the full pipeline (Gmail fetch + R2 market context cache). Without them the worker starts but pipeline jobs will fail at the Gmail auth step.
+> **Gmail tokens:** The OAuth app is published to Production — tokens do not expire. To regenerate: `rm token.json token_modify.json` then run `emails_fetch.py` and `emails_organize.py` locally with `PYTHONPATH=execution python execution/<script>.py` from the `Zimplixio_Marketing` root. Update `GMAIL_REFRESH_TOKEN_READONLY` and `GMAIL_REFRESH_TOKEN_MODIFY` in Railway Worker.
 
 ### LinkedIn (optional, not yet wired)
 
