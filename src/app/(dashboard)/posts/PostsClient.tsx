@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
   CheckCircle, XCircle, Edit3, Save, X, RefreshCw, Loader2, AlertCircle,
-  History, Eye,
+  History, Eye, Trash2,
 } from 'lucide-react'
 
 type Post = {
@@ -129,6 +129,15 @@ export default function PostsClient({
   }
 
   const draftCount = posts.filter((p) => p.status === 'DRAFT').length
+  const unusedCount = posts.filter((p) => p.status === 'DRAFT' || p.status === 'REJECTED').length
+
+  async function cleanUpUnused() {
+    if (!confirm(`Delete all ${unusedCount} draft and rejected posts? This cannot be undone.`)) return
+    const res = await fetch('/api/posts', { method: 'DELETE' })
+    if (res.ok) {
+      setPosts((prev) => prev.filter((p) => p.status !== 'DRAFT' && p.status !== 'REJECTED'))
+    }
+  }
 
   return (
     <div className="p-7 md:p-10 max-w-4xl mx-auto">
@@ -143,21 +152,31 @@ export default function PostsClient({
             {draftCount} draft{draftCount !== 1 ? 's' : ''} awaiting review
           </p>
         </div>
-        <div className="flex items-center gap-1 bg-white rounded-xl p-1 border border-gray-100 shadow-sm">
-          {(['ALL', 'DRAFT', 'APPROVED'] as const).map((f) => (
+        <div className="flex items-center gap-2">
+          {isAdmin && unusedCount > 0 && (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className="text-xs font-semibold px-4 py-2 rounded-lg transition-all"
-              style={{
-                background: filter === f ? 'var(--indigo-600)' : 'transparent',
-                color: filter === f ? '#fff' : '#9ca3af',
-                boxShadow: filter === f ? '0 2px 8px rgba(79,70,229,0.3)' : 'none',
-              }}
+              onClick={cleanUpUnused}
+              className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-700 border border-red-200 hover:border-red-300 hover:bg-red-50 px-3 py-2 rounded-xl transition-colors"
             >
-              {f}
+              <Trash2 className="w-3.5 h-3.5" /> Clean up ({unusedCount})
             </button>
-          ))}
+          )}
+          <div className="flex items-center gap-1 bg-white rounded-xl p-1 border border-gray-100 shadow-sm">
+            {(['ALL', 'DRAFT', 'APPROVED'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className="text-xs font-semibold px-4 py-2 rounded-lg transition-all"
+                style={{
+                  background: filter === f ? 'var(--indigo-600)' : 'transparent',
+                  color: filter === f ? '#fff' : '#9ca3af',
+                  boxShadow: filter === f ? '0 2px 8px rgba(79,70,229,0.3)' : 'none',
+                }}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
