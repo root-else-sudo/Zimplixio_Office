@@ -20,8 +20,8 @@ const navGroups: NavGroup[] = [
     label: 'Marketing',
     items: [
       { href: '/',         label: 'Overview', icon: LayoutDashboard },
-      { href: '/posts',    label: 'Posts',    icon: FileText },
       { href: '/agents',   label: 'Pipeline', icon: Bot },
+      { href: '/posts',    label: 'Posts',    icon: FileText },
       { href: '/calendar', label: 'Calendar', icon: CalendarDays },
     ],
   },

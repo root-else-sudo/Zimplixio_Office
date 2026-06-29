@@ -6,14 +6,14 @@ A Next.js dashboard that serves as the control center for Zimplixio's marketing 
 - Displays, reviews, and approves/rejects generated post drafts
 - Shows pipeline run history and agent status with a live flow visualization
 - Surfaces AI-generated business opportunities (Tavily + Claude)
-- Delivers notifications via WhatsApp (Twilio) and browser push
+- Delivers notifications via SMS (Twilio, optional) and browser push
 
 ## Production Status (as of 2026-06-01)
 
 Both services are live and operational:
 - **Web:** `https://crm.zimplixio.com` (Cloudflare → Railway, SSL Full)
 - **Worker:** Railway `Worker` service, clones `Zimplixio_Marketing@master` at startup, runs pipeline jobs via pg-boss
-- **Pipeline:** end-to-end verified — Gmail fetch → parse → filter → context → generate → save → organize
+- **Pipeline:** end-to-end verified — Gmail fetch → parse → filter → context → generate → organize (6 steps; `posts_save.py` removed 2026-06-02 — DB is the sole storage)
 - **Gmail OAuth:** app published to Production in Google Cloud Console (no 7-day token expiry)
 - **R2:** bucket `zimplixio-marketing` in Cloudflare, used for `market_context.json` caching
 
@@ -30,7 +30,7 @@ The dashboard triggers Python scripts that live in the `Zimplixio_Marketing` pro
 - **Auth**: NextAuth v5 (credentials + TOTP MFA)
 - **Styles**: Tailwind CSS + custom Soft UI design system in `src/app/globals.css`
 - **Charts**: Recharts
-- **Notifications**: Twilio WhatsApp + Web Push (VAPID)
+- **Notifications**: Twilio SMS (optional — `TWILIO_SMS_FROM`/`SMS_NOTIFY_TO` not yet configured) + Web Push (VAPID)
 - **Deployment**: Railway — two services (`Zimplixio_Office` web + `Worker`) sharing one Postgres addon
 
 ## Architecture Pattern
