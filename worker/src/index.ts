@@ -1,62 +1,17 @@
 // Worker entry point. Runs as a long-lived Node process — see docs/RAILWAY.md
 // for the production deploy topology. Locally, run `npm run worker`.
 import './load-env' // MUST be first — populates process.env before env.ts parses it
-import { startBoss, JOB_NAMES, type JobPayloads } from '@/lib/pgboss'
+import { startBoss } from '@/lib/pgboss'
 import { logger } from '@/lib/logger'
-import { handlePipelineRun } from './handlers/pipeline'
-import { handleOpportunitiesFind } from './handlers/opportunities'
-import { handleLinkedInPublish } from './handlers/linkedin'
-import { handleStaleDraftsCheck } from './handlers/cron'
+
+// V1's job handlers (pipeline, opportunities, linkedin, cron) are retired with
+// the rest of the V1 schema. The Research Engine job (planning §2.3/§4.4) is
+// registered here once it's built (Increment 3).
 
 async function main() {
   const boss = await startBoss()
 
-  // pg-boss v10 requires queues to exist before schedule() can reference them.
-  // createQueue is idempotent on existing queues, but parallel creates of
-  // distinct queues deadlock on a shared table lock — serialise the calls.
-  for (const name of Object.values(JOB_NAMES)) {
-    await boss.createQueue(name)
-  }
-
-  // pg-boss serializes per-job-name by default; the singleton key on enqueue
-  // is what enforces "only one pipeline at a time" across the whole system.
-  await boss.work<JobPayloads[typeof JOB_NAMES.PIPELINE_RUN]>(
-    JOB_NAMES.PIPELINE_RUN,
-    async ([job]) => {
-      logger.info({ jobId: job.id, payload: job.data }, 'pipeline.run picked up')
-      await handlePipelineRun(job.data)
-    }
-  )
-
-  await boss.work<JobPayloads[typeof JOB_NAMES.OPPORTUNITIES_FIND]>(
-    JOB_NAMES.OPPORTUNITIES_FIND,
-    async ([job]) => {
-      logger.info({ jobId: job.id, payload: job.data }, 'opportunities.find picked up')
-      await handleOpportunitiesFind(job.data)
-    }
-  )
-
-  await boss.work<JobPayloads[typeof JOB_NAMES.LINKEDIN_PUBLISH]>(
-    JOB_NAMES.LINKEDIN_PUBLISH,
-    async ([job]) => {
-      logger.info({ jobId: job.id, webhookId: job.data.webhookId }, 'linkedin.publish picked up')
-      await handleLinkedInPublish(job.data)
-    }
-  )
-
-  await boss.work<JobPayloads[typeof JOB_NAMES.STALE_DRAFTS_CHECK]>(
-    JOB_NAMES.STALE_DRAFTS_CHECK,
-    async ([job]) => {
-      logger.info({ jobId: job.id }, 'drafts.stale-check picked up')
-      await handleStaleDraftsCheck()
-    }
-  )
-
-  // Cron — every 6 hours. boss.schedule is idempotent: re-registering the same
-  // name updates the schedule rather than queuing duplicates.
-  await boss.schedule(JOB_NAMES.STALE_DRAFTS_CHECK, '0 */6 * * *', { triggered: 'cron' })
-
-  logger.info('worker handlers registered, waiting for jobs')
+  logger.info('worker started, no jobs registered yet')
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'worker shutting down')

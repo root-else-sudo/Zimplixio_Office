@@ -18,197 +18,11 @@ model User {
   mfaSecret    String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-
-  notifications Notification[]
-  pushSubs      PushSubscription[]
-  projects      Project[]
 }
 
 enum Role {
   ADMIN
   REVIEWER
-}
-
-// ─── Agents ──────────────────────────────────────────────────────────────────
-
-model Agent {
-  id           String   @id @default(cuid())
-  name         String   @unique
-  description  String
-  cronSchedule String
-  scriptPath   String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  runs PipelineRun[]
-}
-
-// ─── Pipeline Runs ───────────────────────────────────────────────────────────
-
-model PipelineRun {
-  id              String    @id @default(cuid())
-  agentId         String
-  agent           Agent     @relation(fields: [agentId], references: [id])
-  status          RunStatus @default(RUNNING)
-  startedAt       DateTime  @default(now())
-  finishedAt      DateTime?
-  // Deprecated since Phase 4 — structured per-step events live in PipelineEvent.
-  // Kept so historical rows remain readable; new rows leave this null.
-  log             String?
-  // Optional dedup key (e.g. source-email-hash). Phase 4 reserves the column;
-  // production population lands in Phase 5's audit work.
-  idempotencyKey  String?   @unique
-
-  posts  Post[]
-  events PipelineEvent[]
-}
-
-model PipelineEvent {
-  id        String   @id @default(cuid())
-  runId     String
-  run       PipelineRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-  stepName  String
-  // started | stdout | stderr | finished | failed
-  eventType String
-  payload   Json     @default("{}")
-  createdAt DateTime @default(now())
-
-  @@index([runId, createdAt])
-  @@index([eventType])
-}
-
-enum RunStatus {
-  RUNNING
-  SUCCESS
-  FAILED
-}
-
-// ─── Posts ───────────────────────────────────────────────────────────────────
-
-model Post {
-  id                   String      @id @default(cuid())
-  runId                String
-  run                  PipelineRun @relation(fields: [runId], references: [id])
-  newsletter           String
-  sourceSubject        String
-  sourceDate           DateTime
-  content              String
-  status               PostStatus  @default(DRAFT)
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
-
-  // Audit trail (Phase 5).
-  approvedById         String?
-  approvedAt           DateTime?
-  rejectedById         String?
-  rejectedAt           DateTime?
-  rejectionReason      String?
-
-  versions  PostVersion[]
-  webhooks  Webhook[]
-
-  @@index([status])
-  @@index([createdAt])
-}
-
-enum PostStatus {
-  DRAFT
-  APPROVED
-  REJECTED
-  PUBLISHED
-}
-
-// Immutable history of states the post has been in. v1 is always the
-// pipeline-generated original. Each regenerate/edit appends a new row; the
-// live Post.content is the latest accepted state.
-model PostVersion {
-  id        String           @id @default(cuid())
-  postId    String
-  post      Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
-  version   Int
-  content   String
-  source    PostVersionSource
-  // Free-form metadata. For REGENERATED rows: { selectedOptions, freeText }.
-  feedback  Json?
-  // userId of the actor that produced this version (null for ORIGINAL).
-  createdBy String?
-  createdAt DateTime         @default(now())
-
-  @@unique([postId, version])
-  @@index([postId, createdAt])
-}
-
-enum PostVersionSource {
-  ORIGINAL
-  REGENERATED
-  EDITED
-}
-
-// Outbox-pattern record for any side-effect that should be retryable and
-// observable. Phase 5 uses it for LinkedIn publishes; future kinds slot in
-// without schema changes.
-model Webhook {
-  id          String        @id @default(cuid())
-  kind        WebhookKind
-  status      WebhookStatus @default(PENDING)
-  payload     Json
-  attempts    Int           @default(0)
-  lastError   String?
-  postId      String?
-  post        Post?         @relation(fields: [postId], references: [id], onDelete: SetNull)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  deliveredAt DateTime?
-
-  @@index([status, kind])
-  @@index([createdAt])
-}
-
-enum WebhookKind {
-  LINKEDIN_PUBLISH
-}
-
-enum WebhookStatus {
-  PENDING
-  SUCCEEDED
-  FAILED
-}
-
-// ─── Notifications ───────────────────────────────────────────────────────────
-
-model Notification {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  type      String
-  message   String
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
-}
-
-// ─── Business Opportunities ──────────────────────────────────────────────────
-
-model Opportunity {
-  id             String   @id @default(cuid())
-  title          String
-  sector         String
-  signal         String
-  zimplixioAngle String
-  actions        Json
-  generatedAt    DateTime @default(now())
-}
-
-// ─── Push Subscriptions ──────────────────────────────────────────────────────
-
-model PushSubscription {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
-  createdAt DateTime @default(now())
 }
 
 // ─── Rate Limits ─────────────────────────────────────────────────────────────
@@ -221,100 +35,106 @@ model RateLimit {
   @@index([windowStart])
 }
 
-// ─── Projects ────────────────────────────────────────────────────────────────
+// ─── Departments — the org chart ─────────────────────────────────────────────
 
-model Project {
-  id          String        @id @default(cuid())
-  name        String
-  description String?
-  status      ProjectStatus @default(ACTIVE)
-  color       String        @default("#6366f1")
-  createdById String?
-  createdBy   User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  phases      Phase[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+enum DepartmentKey {
+  PRODUCT_RESEARCH
+  ENGINEERING
+  MARKETING
+  SALES
+  FINANCE
+  OPERATIONS
 }
 
-enum ProjectStatus {
+enum DepartmentStatus {
+  BUILT
+  RESERVED
+}
+
+model Department {
+  id        String           @id @default(cuid())
+  key       DepartmentKey    @unique
+  name      String
+  purpose   String
+  status    DepartmentStatus @default(RESERVED)
+  order     Int              @unique
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  goals     Goal[]
+  tasks     Task[]
+  knowledge Knowledge[]
+  kpis      Kpi[]
+}
+
+// ─── Shared Department Anatomy ────────────────────────────────────────────────
+
+enum GoalStatus {
   ACTIVE
-  COMPLETED
+  ACHIEVED
   ARCHIVED
 }
 
-model Phase {
-  id        String   @id @default(cuid())
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name      String
-  order     Int
-  color     String?
-  tasks     Task[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([projectId])
-}
-
-model Task {
-  id           String           @id @default(cuid())
-  phaseId      String
-  phase        Phase            @relation(fields: [phaseId], references: [id], onDelete: Cascade)
-  name         String
+model Goal {
+  id           String     @id @default(cuid())
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  title        String
   description  String?
-  status       TaskStatus       @default(TODO)
-  startDate    DateTime
-  endDate      DateTime
-  order        Int
-  blockReason  String?
-  proposedBy   String?
-  approvedById String?
-  approvedAt   DateTime?
-  dependencies TaskDependency[] @relation("DependentTask")
-  dependents   TaskDependency[] @relation("RequiredTask")
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  status       GoalStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
-  @@index([phaseId])
+  tasks Task[]
+
+  @@index([departmentId])
 }
 
 enum TaskStatus {
   TODO
   IN_PROGRESS
-  BLOCKED
   DONE
-  PENDING_APPROVAL
 }
 
-model TaskDependency {
-  id              String @id @default(cuid())
-  dependentTaskId String
-  requiredTaskId  String
-  dependentTask   Task   @relation("DependentTask", fields: [dependentTaskId], references: [id], onDelete: Cascade)
-  requiredTask    Task   @relation("RequiredTask", fields: [requiredTaskId], references: [id], onDelete: Cascade)
+model Task {
+  id           String     @id @default(cuid())
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  goalId       String?
+  goal         Goal?      @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  title        String
+  description  String?
+  status       TaskStatus @default(TODO)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
-  @@unique([dependentTaskId, requiredTaskId])
+  @@index([departmentId])
+  @@index([goalId])
 }
 
-// ─── LLM Telemetry ───────────────────────────────────────────────────────────
+// Starter operating context per department (planning §1.3). One row per seeded bullet.
+model Knowledge {
+  id           String     @id @default(cuid())
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  content      String
+  order        Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
-model LlmCall {
-  id                  String   @id @default(cuid())
-  userId              String?
-  route               String
-  model               String
-  inputTokens         Int      @default(0)
-  cacheCreationTokens Int      @default(0)
-  cacheReadTokens     Int      @default(0)
-  outputTokens        Int      @default(0)
-  latencyMs           Int      @default(0)
-  costUsd             Decimal? @db.Decimal(12, 6)
-  success             Boolean  @default(true)
-  errorCode           String?
-  createdAt           DateTime @default(now())
+  @@index([departmentId])
+}
 
-  @@index([createdAt])
-  @@index([userId])
-  @@index([route])
-  @@index([model])
+// Basic KPI definitions per department (planning §1.3). Definitions only — no
+// computed/tracked value yet; that is future work once real activity exists to measure.
+model Kpi {
+  id           String     @id @default(cuid())
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  name         String
+  order        Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([departmentId])
 }

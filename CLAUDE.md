@@ -1,26 +1,43 @@
 # Zimplixio Office — Operating Instructions
 
 ## What This Is
-A Next.js dashboard that serves as the control center for Zimplixio's marketing operations. It:
-- Triggers and monitors the email → LinkedIn posts pipeline
-- Displays, reviews, and approves/rejects generated post drafts
-- Shows pipeline run history and agent status with a live flow visualization
-- Surfaces AI-generated business opportunities (Tavily + Claude)
-- Delivers notifications via SMS (Twilio, optional) and browser push
+The single consolidated platform for Zimplixio's operations. A Next.js CRM that will cover:
+- SMB market research and pain point intelligence
+- LinkedIn content generation, review, and approval
+- Business opportunity surfacing and tracking
+- Project and task management (Gantt)
+- Pipeline run history and agent status
 
-## Production Status (as of 2026-06-01)
+## Architectural Direction (as of 2026-06-30)
 
-Both services are live and operational:
+**The CRM is the sole platform going forward.** The companion Python repo (`Zimplixio_Marketing`) has been archived on GitHub — it served its purpose as a starting point but is no longer being developed. All future features are built in TypeScript inside this repo.
+
+Key decisions made:
+- Python repo archived — nothing migrated, everything rebuilt from scratch with proper foundations
+- All AI calls (Tavily, Anthropic) move to TypeScript using their respective JS SDKs
+- PostgreSQL is the single source of truth — no more R2 JSON state files running in parallel
+- A full architectural redesign is in progress before new features are built
+
+## CRM Department Redesign (as of 2026-07-03)
+
+**The redesign now has a defined direction and an approved scope.** The CRM is being reframed from a *feature-organized* app into a **company organized by departments**, with the long-term goal of an autonomous, agent-run company that the owner supervises. Build order: **structure first → agents plug in → autonomy grows.**
+
+**Charter (scope locked):** `docs/superpowers/specs/2026-07-02-crm-department-redesign-charter.md` — read this before doing any redesign work. Summary:
+- **Six departments** (all reserved as structure up front, built one at a time): **Product/Research, Engineering, Marketing, Sales, Finance, Operations.** Marketing↔Sales separate but linked by a lead handoff. People/HR + Legal fold into Operations for now. Operations = the owner's supervisor seat.
+- **Shared department anatomy:** v1 = **Goals + Tasks**, designed to extend to **+ Knowledge + Metrics** soon.
+- **First slice = Product/Research, built in full including a working agent:** Goals + Tasks + a first-class **Findings** artifact (`candidate → validated/approved → rejected`); a **Company Profile** (editable, capabilities-based source of truth grounding the agent); and a **Research Agent** using **Tavily + Claude** over tiered SMB sources, running **scheduled (pg-boss) + Run-now**, producing candidate Findings the owner reviews. A **prose-summary feedback loop** feeds owner decisions back into each run so it improves.
+
+**Current phase / where we are:**
+- Scope is **approved** (charter M0 complete). Owner is reviewing the charter file.
+- **Next up: architecture / design pattern.** Three approaches were drafted; **selection pending.** Recommended = **Approach B**: per-department modules under `src/modules/<department>/` with a thin service layer (the only place that touches Prisma), API routes + pg-boss jobs as thin adapters, agent logic living with its department; keep REST + existing conventions. (A = evolve in place, no service layer; C = B + tRPC.)
+- Owner is planning detailed work instructions in Claude.ai and will return with them before implementation begins. **No implementation has started.**
+
+## Production Status (as of 2026-06-30)
+
 - **Web:** `https://crm.zimplixio.com` (Cloudflare → Railway, SSL Full)
-- **Worker:** Railway `Worker` service, clones `Zimplixio_Marketing@master` at startup, runs pipeline jobs via pg-boss
-- **Pipeline:** end-to-end verified — Gmail fetch → parse → filter → context → generate → organize (6 steps; `posts_save.py` removed 2026-06-02 — DB is the sole storage)
+- **Worker:** Railway `Worker` service — currently still runs the legacy Python pipeline via pg-boss; will be repurposed as part of the redesign
 - **Gmail OAuth:** app published to Production in Google Cloud Console (no 7-day token expiry)
-- **R2:** bucket `zimplixio-marketing` in Cloudflare, used for `market_context.json` caching
-
----
-
-## How It Connects to Zimplixio_Marketing
-The dashboard triggers Python scripts that live in the `Zimplixio_Marketing` project. In production (`PIPELINE_USE_QUEUE=true`) the web service enqueues a pg-boss job; the Worker service clones the marketing repo at startup and handles those jobs, spawning Python scripts as child processes and writing results to PostgreSQL. In local dev (`PIPELINE_USE_QUEUE=false`) the web API route spawns scripts directly. The connection is configured via `MARKETING_DIR` (set to `/Users/josephugaldeberrocal/Documents/Zimplixio_Marketing` locally; set to `/app/marketing` automatically by the worker's `start-worker.sh`).
+- **R2:** bucket `zimplixio-marketing` in Cloudflare — legacy, used for Python pipeline state caching
 
 ## Tech Stack
 - **Framework**: Next.js App Router (server + client components)
@@ -64,9 +81,9 @@ The `validator.ts` warning is a stale `.next/types` artifact — safe to ignore,
 1. **Always run TypeScript check after changes** — `tsc --noEmit` before declaring done
 2. **Server components fetch data; client components own UI state** — never blur this boundary
 3. **Prisma schema is the single source of truth** — run `prisma migrate dev` after any model change
-4. **Never hardcode MARKETING_DIR** — always use the env var
-5. **No posts go live without explicit user action** — the dashboard shows drafts; the user approves
-6. **Use lazy initialization for SDK clients** — never call `new Anthropic()`, `twilio()`, or `webpush.setVapidDetails()` at module level. `next build` runs module-level code without env vars injected, causing crashes. Wrap in a lazy getter called at request time.
+4. **No posts go live without explicit user action** — the dashboard shows drafts; the user approves
+5. **Use lazy initialization for SDK clients** — never call `new Anthropic()`, `twilio()`, or `webpush.setVapidDetails()` at module level. `next build` runs module-level code without env vars injected, causing crashes. Wrap in a lazy getter called at request time.
+6. **Department redesign in progress** — scope is locked (see `docs/superpowers/specs/2026-07-02-crm-department-redesign-charter.md`), but the architecture pattern is not yet chosen and no implementation has started. Do not add features or write redesign code before the owner returns with approved work instructions. New work waits for the design-pattern decision + plan.
 
 ## Key Environment Variables
 
@@ -75,6 +92,8 @@ See `docs/ENV.md` for the full reference. Vars that affect code behavior:
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
-| `PIPELINE_USE_QUEUE` | `false` (dev, inline subprocess) / `true` (prod, pg-boss worker) |
-| `MARKETING_DIR` | Absolute path to Zimplixio_Marketing project root |
 | `AUTH_TRUST_HOST` | Set to `1` in production — required behind Cloudflare proxy |
+| `ANTHROPIC_API_KEY` | Claude API — used for content generation and research |
+| `TAVILY_API_KEY` | Tavily search API — used for market research |
+
+> **Legacy vars (Python pipeline era, being phased out):** `PIPELINE_USE_QUEUE`, `MARKETING_DIR` — still present in Railway env but will be removed as part of the redesign.

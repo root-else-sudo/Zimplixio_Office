@@ -2,7 +2,6 @@ import Anthropic from '@anthropic-ai/sdk'
 import pRetry from 'p-retry'
 import { serverEnv } from './env'
 import { logger } from './logger'
-import { prisma } from './prisma'
 import { computeCostUsd, type UsageCounts } from './ai/cost'
 
 // Lazy singleton — never instantiated at module load (build time serverEnv is empty).
@@ -179,26 +178,8 @@ interface RecordCallArgs {
   errorCode?: string
 }
 
-// Fire-and-forget telemetry write. Failures are logged but never block the
-// caller — telemetry is observability, not correctness.
+// Fire-and-forget telemetry log. V1's LlmCall table is gone in the v2 rebuild
+// (no telemetry schema defined yet) — log instead so usage is still visible.
 async function recordCall(args: RecordCallArgs): Promise<void> {
-  try {
-    await prisma.llmCall.create({
-      data: {
-        userId: args.userId,
-        route: args.route,
-        model: args.model,
-        inputTokens: args.usage.inputTokens,
-        outputTokens: args.usage.outputTokens,
-        cacheCreationTokens: args.usage.cacheCreationTokens,
-        cacheReadTokens: args.usage.cacheReadTokens,
-        latencyMs: args.latencyMs,
-        success: args.success,
-        errorCode: args.errorCode,
-        costUsd: args.costUsd,
-      },
-    })
-  } catch (err) {
-    logger.error({ err, route: args.route }, 'llm telemetry write failed')
-  }
+  logger.info({ ...args }, 'llm call')
 }

@@ -3,39 +3,16 @@ import { serverEnv } from './env'
 import { logger } from './logger'
 
 // Job names. Strongly typed so enqueue / handler registration can't drift.
-export const JOB_NAMES = {
-  PIPELINE_RUN: 'pipeline.run',
-  OPPORTUNITIES_FIND: 'opportunities.find',
-  LINKEDIN_PUBLISH: 'linkedin.publish',
-  STALE_DRAFTS_CHECK: 'drafts.stale-check',
-} as const
+// V1's jobs (pipeline.run, opportunities.find, linkedin.publish, drafts.stale-check)
+// are retired with the rest of the V1 schema. The Research Engine job (planning
+// §2.3/§4.4) is registered here once it's built (Increment 3).
+export const JOB_NAMES = {} as const
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES]
 
-// Per-job payload shapes.
-export interface PipelineRunPayload {
-  runId: string
-  agentId: string
-}
-
-export interface OpportunitiesFindPayload {
-  triggeredByUserId: string
-}
-
-export interface LinkedInPublishPayload {
-  webhookId: string
-}
-
-export interface StaleDraftsCheckPayload {
-  // Cron-driven; payload is empty but typed so the dispatch path stays uniform.
-  triggered: 'cron'
-}
-
+// Per-job payload shapes — populated as jobs are added.
 export interface JobPayloads {
-  [JOB_NAMES.PIPELINE_RUN]: PipelineRunPayload
-  [JOB_NAMES.OPPORTUNITIES_FIND]: OpportunitiesFindPayload
-  [JOB_NAMES.LINKEDIN_PUBLISH]: LinkedInPublishPayload
-  [JOB_NAMES.STALE_DRAFTS_CHECK]: StaleDraftsCheckPayload
+  [key: string]: never
 }
 
 const globalForBoss = globalThis as unknown as { boss?: PgBoss }

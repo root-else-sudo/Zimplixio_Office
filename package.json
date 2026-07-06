@@ -12,7 +12,8 @@
     "worker": "tsx worker/src/index.ts",
     "backfill:post-versions": "tsx scripts/backfill-post-versions.ts",
     "trigger:stale-check": "tsx scripts/trigger-stale-check.ts",
-    "test:whatsapp": "tsx scripts/test-whatsapp.ts"
+    "test:whatsapp": "tsx scripts/test-whatsapp.ts",
+    "prepare": "husky"
   },
   "prisma": {
     "seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts"
@@ -58,6 +59,7 @@
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "husky": "^9.1.7",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
