@@ -1,6 +1,9 @@
 import Sidebar from '@/components/Sidebar'
 import { prisma } from '@/lib/prisma'
 
+// DB-backed on every request (department nav) — never statically prerender.
+export const dynamic = 'force-dynamic'
+
 // SessionProvider lives in the root layout so it covers auth pages too.
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const departments = await prisma.department.findMany({
