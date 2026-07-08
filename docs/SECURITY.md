@@ -1,6 +1,6 @@
 # Security — Zimplixio Office
 
-This document describes the authentication, authorization, validation, and rate-limiting model after Phase 1 of the foundation roadmap. It also flags known gaps that are intentionally deferred.
+This document describes the current authentication, authorization, validation, and rate-limiting model. It also flags known gaps that are intentionally deferred. See the external CRM v2 Security doc (referenced in `CLAUDE.md`) for the fuller v2 security spec (audit logging, dependency hygiene, threat model) as it gets built out.
 
 ## Authentication
 
@@ -14,8 +14,8 @@ This document describes the authentication, authorization, validation, and rate-
 
 - **Roles:** `ADMIN`, `REVIEWER` (Prisma enum, source of truth).
 - **Wrapper:** `withAuth(handler, { role? })` in `src/lib/rbac.ts` enforces session presence and role on every wrapped handler. ADMIN implies all REVIEWER permissions (rank-based check, see `hasRole`).
-- **Currently ADMIN-only:** `PATCH/DELETE /api/posts/[id]`, `POST /api/pipeline`, `POST /api/opportunities`.
-- **REVIEWER+:** `POST /api/posts/[id]/analyze`, `POST /api/posts/[id]/regenerate`, `POST /api/notifications/subscribe`, `POST /api/mfa/verify`.
+- **Currently ADMIN-only:** nothing — no route uses `{ role: 'ADMIN' }` yet.
+- **REVIEWER+ (i.e. any authenticated user):** `POST /api/mfa/setup`, `POST /api/mfa/verify`, `PATCH /api/company-profile`, `POST /api/findings`, `GET/PATCH /api/findings/[id]`. No role-gating on the Product/Research artifacts — the team is two people and nothing in the v2 docs calls for restricting them.
 - **Public:** `/api/auth/[...nextauth]` (NextAuth's own routes).
 
 ## Input validation
@@ -34,8 +34,7 @@ This document describes the authentication, authorization, validation, and rate-
 - Persisted in the `RateLimit` model (key + count + windowStart).
 - Applied at:
   - `POST /api/mfa/verify` — 5 attempts / 15 min / userId.
-  - `POST /api/posts/[id]/analyze` — 30 / hour / userId.
-  - `POST /api/posts/[id]/regenerate` — 20 / hour / userId.
+- Not yet applied to the Company Profile / Findings routes — they're plain DB writes, not paid-API-triggering, so this matches the v2 security doc's guidance (rate limit login/MFA and anything that triggers paid API calls). Revisit once the Research Agent's "Run now" trigger exists (Increment 3+).
 - 429 responses include a `Retry-After` header (seconds).
 - Upgrade path: switch to `@upstash/ratelimit` (Redis) if Postgres write contention becomes a problem. For a small admin site this is unlikely.
 
@@ -63,7 +62,7 @@ The path to a stricter CSP is a nonce-based middleware pattern that drops `'unsa
 - **No signup or password-reset flow.** Acceptable while the site is single-user; users are seeded via `prisma/seed.ts`. Adding teammates today requires DB access. Build-out is part of any future onboarding work.
 - **`mfaVerified` token lifetime.** After `/api/mfa/verify` succeeds, the verify-mfa page calls `useSession().update({ mfaVerified: true })` which re-issues the JWT cookie via the `jwt` callback's `update` trigger (see `src/lib/auth.config.ts`). The flag then lives for the rest of the JWT's lifetime — NextAuth does not auto-expire MFA verification, so a stolen JWT remains MFA-verified until the cookie itself expires. Mitigation: keep `NEXTAUTH_SECRET` private and rotate periodically; consider re-verification on sensitive admin actions in a later phase.
 - **No password strength enforcement.** The seed script and any future signup must enforce a minimum policy (length ≥ 12, mixed character classes). Not urgent at single-user scale.
-- **No audit log of admin actions.** Phase 5 of the foundation roadmap adds approval audit fields and a `Webhook` outbox. Until then, only application logs (Phase 2 introduces structured logging via `pino`) record who did what.
+- **No audit log yet.** The v2 security doc calls for a light Postgres audit table (logins, MFA failures, Finding approve/reject decisions) — not built yet. Until then, only application logs (`src/lib/logger.ts`, `pino`) record who did what.
 - **CSP is report-only.** Will be flipped to enforcing once we confirm no console violations in normal use.
 
 ## Operational notes

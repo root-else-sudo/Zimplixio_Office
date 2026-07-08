@@ -5,15 +5,15 @@ The project deploys as **two Railway services in one project**, sharing one Post
 ```
 ┌─────────────────────────────┐         ┌─────────────────────────────┐
 │  Service: Zimplixio_Office  │         │  Service: Worker            │
-│  (Next.js, this repo)       │         │  (Node + Python, this repo) │
+│  (Next.js, this repo)       │         │  (plain Node, this repo)    │
 │                             │         │                             │
 │  Railpack builder           │         │  Dockerfile.worker          │
-│  npm run start              │         │  scripts/start-worker.sh    │
+│  npm run start              │         │  npm run worker             │
 │                             │         │                             │
-│  - HTTP API + UI            │         │  - Clones Zimplixio_Marketing│
-│  - Enqueues pg-boss jobs    │         │  - pg-boss job handlers     │
-│  - Reads PipelineEvent      │         │  - Spawns Python scripts    │
-│    rows for live progress   │         │  - Writes PipelineEvent rows│
+│  - HTTP API + UI            │         │  - pg-boss job handlers     │
+│  - Enqueues pg-boss jobs    │         │    (none registered yet —   │
+│                             │         │    Research Engine lands    │
+│                             │         │    here in Increment 3)     │
 └──────────────┬──────────────┘         └──────────────┬──────────────┘
                │                                        │
                └─────────────┬──────────────────────────┘
@@ -47,10 +47,8 @@ Railpack auto-detects Next.js. No custom build command needed. `railway.toml` se
 | `NEXTAUTH_URL` | `https://crm.zimplixio.com` |
 | `NEXTAUTH_SECRET` | 32+ char random string |
 | `AUTH_TRUST_HOST` | `1` — required when running behind Cloudflare proxy |
-| `PIPELINE_USE_QUEUE` | `true` — enqueues jobs to pg-boss worker |
 | `ANTHROPIC_API_KEY` | Anthropic console |
-| `TWILIO_*`, `WHATSAPP_*` | Twilio console |
-| `VAPID_*`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web push keys |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID` | Twilio console — MFA |
 | `LOG_LEVEL` | `info` |
 
 Full variable list in `docs/ENV.md`.
@@ -80,46 +78,17 @@ Use `DATABASE_PUBLIC_URL` from the Postgres service variables (not `DATABASE_URL
 
 ### Build
 
-Uses `Dockerfile.worker` at repo root. Set in Railway → Settings → Build → Dockerfile path: `Dockerfile.worker`.
+Uses `Dockerfile.worker` at repo root. Set in Railway → Settings → Build → Dockerfile path: `Dockerfile.worker`. Just a plain Node image now — no Python, no cloned repo (that was V1's Python-pipeline setup; removed as part of the v2 rebuild since the Research Engine is built as TypeScript modules the worker calls directly).
 
-No start command override needed — the Dockerfile `CMD ["/start-worker.sh"]` runs automatically (do not set a custom start command in Railway UI, as `railway.toml` would override it).
-
-### Startup sequence (`scripts/start-worker.sh`)
-
-1. Removes any stale `/app/marketing` directory
-2. Clones `Zimplixio_Marketing` at `MARKETING_REPO_REF` (default: `master`) using `GITHUB_TOKEN`
-3. Creates Python venv, installs `requirements.txt`
-4. Sets `MARKETING_DIR=/app/marketing`
-5. Runs `npm run worker` (pg-boss worker process)
+Start command: `npm run worker` (set directly as the Dockerfile `CMD`). No start command override needed in the Railway UI — `railway.toml` doesn't set one, so the Dockerfile's `CMD` runs automatically.
 
 ### Required env vars
 
-All web service vars plus:
-
-| Variable | Value |
-|---|---|
-| `GITHUB_TOKEN` | GitHub PAT with `repo` read scope, no expiration |
-| `GITHUB_REPO_PATH` | `root-else-sudo/Zimplixio_Marketing` |
-| `MARKETING_REPO_REF` | `master` |
-| `TAVILY_API_KEY` | Tavily console — **pending** |
-| `GMAIL_CLIENT_ID` | From `credentials.json` — **pending** |
-| `GMAIL_CLIENT_SECRET` | From `credentials.json` — **pending** |
-| `GMAIL_REFRESH_TOKEN_READONLY` | From `token.json` — **pending** |
-| `GMAIL_REFRESH_TOKEN_MODIFY` | From `token_modify.json` — **pending** (requires local run first) |
-| `R2_ACCOUNT_ID` | Cloudflare R2 — **pending** |
-| `R2_ACCESS_KEY_ID` | Cloudflare R2 — **pending** |
-| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 — **pending** |
-| `R2_BUCKET_NAME` | Cloudflare R2 — **pending** |
-
-Items marked **pending** are required for the full pipeline (Gmail fetch + R2 market context cache). Without them the worker starts but pipeline jobs will fail at the Gmail auth step.
+Same schema as the web service — see `docs/ENV.md`. No worker-only vars right now (V1's `GITHUB_TOKEN`/`GITHUB_REPO_PATH`/`MARKETING_REPO_REF`/`GMAIL_*`/`R2_*` are gone along with the Python pipeline that needed them — remove them from the Worker's Railway variables whenever convenient).
 
 ### Sizing
 
-Pipeline runs spawn Python subprocesses loading LLM clients and processing JSON. Minimum 1 GB RAM recommended.
-
-## Rollback
-
-Set `PIPELINE_USE_QUEUE=false` on the web service — reverts to the legacy in-request subprocess path. The worker stays running idle (no cost beyond the dyno).
+Minimal right now — no jobs are registered. Revisit once the Research Engine (Ground→Gather→Hypothesize→Test→Queue, Increment 3) lands; that will involve LLM calls and web scraping.
 
 ## Local development
 
@@ -127,4 +96,4 @@ Set `PIPELINE_USE_QUEUE=false` on the web service — reverts to the legacy in-r
 npm run worker
 ```
 
-Uses local `DATABASE_URL` and `MARKETING_DIR`. Keep `PIPELINE_USE_QUEUE=false` in `.env` to run without the worker.
+Uses local `DATABASE_URL`. No other setup needed.

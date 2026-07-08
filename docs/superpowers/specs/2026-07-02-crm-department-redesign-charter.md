@@ -14,7 +14,7 @@
 | **Date Issued** | 2026-07-02 |
 | **Project Sponsor** | Joe Ugalde |
 | **Project Owner** | Joe Ugalde |
-| **Status** | Scope approved — architecture/design phase pending |
+| **Status** | Scope approved; architecture decided (Option A — see planning doc §4.3); Increments 1-2 complete. **This charter's scope/decision sections are a frozen historical record — for current live status, see `CLAUDE.md`.** |
 
 ---
 
@@ -157,13 +157,13 @@ records) up front; they are built out one at a time.
 | Milestone | Description | Status |
 |---|---|---|
 | M0 | Scope approved (this charter) | ✅ Complete |
-| M1 | Architecture & design pattern approved | ⏳ Pending |
-| M2 | Department structure + shared anatomy live | ⏳ Pending |
-| M3 | Product/Research chassis (Goals + Tasks + Findings + Company Profile) | ⏳ Pending |
+| M1 | Architecture & design pattern approved | ✅ Complete — Option A (generic Department + shared anatomy), planning doc §4.3 |
+| M2 | Department structure + shared anatomy live | ✅ Complete (Increment 1, 2026-07-06) |
+| M3 | Product/Research chassis (Goals + Tasks + Findings + Company Profile) | ✅ Complete (Increment 1 + 2, 2026-07-08) |
 | M4 | Research Agent (scheduled + Run-now) producing Findings | ⏳ Pending |
 | M5 | Feedback learning loop operational | ⏳ Pending |
 
-> Dates intentionally omitted at charter stage; to be set with the implementation plan.
+> See `CLAUDE.md`'s build-order table for the live/current status going forward — this table reflects state as of 2026-07-08 and won't be updated again per-increment.
 
 ---
 
@@ -247,7 +247,7 @@ records) up front; they are built out one at a time.
 
 | Role | Name | Approval | Date |
 |---|---|---|---|
-| Project Sponsor | Joe Ugalde | ☐ Approved | ____________ |
+| Project Sponsor | Joe Ugalde | ☑ Approved (in practice, via the v2 planning docs + directed implementation work) | 2026-07-06 |
 
 ---
 

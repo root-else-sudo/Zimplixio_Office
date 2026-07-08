@@ -199,9 +199,39 @@ async function seedDepartments() {
   }
 }
 
+// First-pass draft — assembled from already-approved copy across the v2 docs
+// (five service lines, positioning, credentials sequencing). Not literal doc
+// text like Knowledge/KPIs; the owner is expected to rewrite this.
+const COMPANY_PROFILE_DRAFT = `Zimplixio is a founder-led, remote-first technology partner (Joe Ugalde and Maria Jose Espinoza) offering enterprise-grade technical expertise with SMB agility — a systems builder, not a hire substitute: clients get the control of an in-house team plus the technology to back it up.
+
+We deliver across five service lines: Roadmap & Planning; Solution Architecture & Implementation; Data Engineering & Automation (including data-migration rescues); Embedded Technical Partnership; and AI & Agentic Automation.
+
+We lead with value, not cost — prior work with clients like PayPal, HP, and IBM supports the pitch but doesn't open it. Engagement path: Discovery → Assessment → Execution → Deliver.
+
+Operating principle for Product/Research: a service must be proven with real clients before it's productized — there is no repeatable product without first solving a real need as a bespoke service.`
+
+async function seedCompanyProfile() {
+  const productResearch = await prisma.department.findUnique({
+    where: { key: 'PRODUCT_RESEARCH' },
+  })
+  if (!productResearch) return
+
+  await prisma.companyProfile.upsert({
+    where: { departmentId: productResearch.id },
+    update: {},
+    create: {
+      departmentId: productResearch.id,
+      content: COMPANY_PROFILE_DRAFT,
+    },
+  })
+
+  console.log('Seeded Company Profile (draft)')
+}
+
 async function main() {
   await seedAdminUser()
   await seedDepartments()
+  await seedCompanyProfile()
 }
 
 main()

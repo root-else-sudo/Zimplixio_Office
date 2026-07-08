@@ -1,57 +1,46 @@
 # Zimplixio Office
 
-The control center for Zimplixio's marketing operations. A Next.js dashboard that orchestrates AI-powered content pipelines, surfaces business opportunities, and manages project work — all with a human-in-the-loop approval layer before anything goes live.
+The single consolidated platform for Zimplixio's operations — a Next.js CRM organized as a **company made of departments** (Product/Research, Engineering, Marketing, Sales, Finance, Operations), heading toward an autonomous, agent-run company the owner supervises.
 
 **Live:** `https://crm.zimplixio.com`
 
+This is a from-scratch v2 rebuild. A prior, feature-organized version of this app (Posts/LinkedIn, Projects/Gantt, Opportunities, backed by a separate Python pipeline repo) has been fully retired — nothing from it was migrated. See `CLAUDE.md` for the full current status and build order.
+
 ## What it does
 
-| Section | Purpose |
-|---|---|
-| **Pipeline** | Triggers and monitors the email → LinkedIn post pipeline. Shows live step progress. |
-| **Posts** | Review, edit, regenerate, approve, or reject AI-generated LinkedIn drafts. |
-| **Opportunities** | AI-surfaced business leads (Tavily + Claude). |
-| **Projects** | Gantt-style project tracker with phase/task hierarchy and dependency arrows. Supports agent-proposed tasks with inline approve/reject. |
-| **Calendar** | Scheduled pipeline and post timeline. |
-| **Admin → AI Usage** | Token counts, latency, and cost breakdown per Claude API call. |
+The sidebar is the org chart: six departments, each sharing the same base anatomy (**Goals + Tasks + Knowledge + KPIs**). Only **Product/Research** is built out so far; the other five are reserved seats (visible, clickable, not yet developed).
+
+Product/Research additionally has:
+- **Company Profile** — an editable, freeform-prose source of truth describing what Zimplixio can credibly offer as a service. This is the future Research Agent's fit lens.
+- **Findings** — candidate service opportunities with a `candidate → validated/rejected` lifecycle, recorded and reviewed by hand today; a Research Agent (Tavily + Claude) will surface these automatically in a later phase.
 
 ## Architecture
 
-This repo is one half of a two-repo system:
+Single Next.js app + one Postgres database (via Prisma) + a Worker service for background jobs (pg-boss). No second repo, no other language — the future Research Engine is plain TypeScript modules the Worker calls directly.
 
-```
-zimplixio-office (this repo)          Zimplixio_Marketing (Python repo)
-─────────────────────────────         ──────────────────────────────────
-Next.js app + pg-boss worker    ←───  Python pipeline scripts
-Prisma / PostgreSQL                   Gmail API, Tavily, Claude
-Railway: Zimplixio_Office service     MARKETING_DIR env var points here
-Railway: Worker service
-```
-
-The Worker service (separate Railway service, built from `Dockerfile.worker`) clones the marketing repo at startup, runs the Python scripts as child processes, validates their JSON output with Zod, and writes results to the database. The two repos communicate **only through the database and job queue** — never through the filesystem in production.
+**The keystone data model:** one generic `Department` entity + shared-anatomy tables (`Goal`, `Task`, `Knowledge`, `Kpi`), each referencing a department. Department-specific artifacts (like Product/Research's `CompanyProfile`/`Finding`) get their own tables keyed to the department that owns them. Adding a new department is filling in a shape, never rebuilding one.
 
 ### Page pattern
 
 ```
-page.tsx (server)  →  props  →  PageClient.tsx (client)
+page.tsx (server)  →  props  →  *Client.tsx (client)
                                        ↕ fetch
                                /api/[route]/route.ts
                                        ↕
                                      Prisma
 ```
 
-Server components fetch from Prisma and pass serialized data to client components. Client components own UI state and call API routes for mutations.
+Server components fetch from Prisma and pass serialized data to client components. Client components own UI state and call API routes for mutations. Never call Prisma from a client component.
 
 ## Tech stack
 
 - **Framework**: Next.js App Router (TypeScript, strict mode)
 - **Database**: PostgreSQL via Prisma ORM
-- **Job queue**: pg-boss (pipeline runs, LinkedIn publish, opportunities)
-- **Auth**: NextAuth v5 — credentials + TOTP MFA
-- **Styles**: Tailwind CSS v4 + Soft UI design system
-- **Charts**: Recharts
-- **Notifications**: Twilio WhatsApp + Web Push (VAPID)
-- **Deployment**: Railway (two services: `Zimplixio_Office` + `Worker`)
+- **Job queue**: pg-boss — infrastructure kept, no jobs registered yet (the future Research Engine job lands here)
+- **Auth**: NextAuth v5 — credentials + Twilio Verify TOTP MFA
+- **Styles**: Tailwind CSS v4 + Soft UI design system, navy/forest-green/copper palette
+- **Secrets hygiene**: gitleaks pre-commit hook via husky
+- **Deployment**: Railway (two services: `Zimplixio_Office` + `Worker`, one shared Postgres)
 
 ## Local setup
 
@@ -59,7 +48,6 @@ Server components fetch from Prisma and pass serialized data to client component
 
 - Node.js 20 (via nvm)
 - PostgreSQL running locally
-- Python 3 + the `Zimplixio_Marketing` repo cloned alongside this one
 
 > **Apple Silicon note:** The project uses an x86_64 Node binary via nvm. Normal terminal usage with nvm loaded works fine. For TypeScript checks inside Claude Code, prefix with the full binary path (see `CLAUDE.md`).
 
@@ -69,35 +57,26 @@ Server components fetch from Prisma and pass serialized data to client component
 npm install
 ```
 
-`postinstall` runs `prisma generate` automatically.
+`postinstall` runs `prisma generate` automatically. `prepare` installs the gitleaks pre-commit hook (requires `gitleaks` on your machine — `brew install gitleaks`).
 
 ### 2. Set environment variables
 
-Copy `.env.example` to `.env` and fill in values. Required variables:
+Required variables — see `docs/ENV.md` for the full reference:
 
 | Variable | Description |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `NEXTAUTH_URL` | `http://localhost:3000` |
-| `NEXTAUTH_SECRET` | Any random string (`openssl rand -base64 48`) |
-| `MARKETING_DIR` | Absolute path to `Zimplixio_Marketing` repo root |
+| `NEXTAUTH_SECRET` | Any random string ≥32 chars (`openssl rand -base64 48`) |
 | `ANTHROPIC_API_KEY` | Claude API key |
-| `TWILIO_ACCOUNT_SID` | Twilio account |
-| `TWILIO_AUTH_TOKEN` | Twilio auth token |
-| `TWILIO_VERIFY_SERVICE_SID` | Twilio Verify (TOTP MFA) |
-| `TWILIO_WHATSAPP_FROM` | `whatsapp:+14155238886` |
-| `WHATSAPP_NOTIFY_TO` | Recipient WhatsApp number |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web push public key |
-| `VAPID_PRIVATE_KEY` | Web push private key |
-| `VAPID_EMAIL` | Web push contact email |
-
-See `docs/ENV.md` for the full variable reference including worker-only vars.
+| `TAVILY_API_KEY` | Tavily API key (used once the Research Engine is built) |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID` | Twilio Verify (TOTP MFA) |
 
 ### 3. Set up the database
 
 ```bash
 npx prisma migrate dev   # apply all migrations
-npm run seed             # create admin user + seed master plan project
+npm run seed             # create admin user + seed departments
 ```
 
 ### 4. Run
@@ -106,15 +85,13 @@ npm run seed             # create admin user + seed master plan project
 npm run dev
 ```
 
-Pipeline runs locally via subprocess — no worker process needed (`PIPELINE_USE_QUEUE` defaults to `false`).
-
 ## Key commands
 
 ```bash
 npm run dev                  # local dev server on :3000
 npm run build                # production build
-npm run seed                 # seed admin user + projects
-npm run worker               # start pg-boss worker (production only)
+npm run seed                 # seed admin user + departments
+npm run worker               # start pg-boss worker (no jobs registered yet)
 npx prisma migrate dev       # apply schema changes + regenerate client
 npx prisma generate          # regenerate Prisma client only
 npx prisma studio            # visual DB browser
@@ -127,9 +104,7 @@ Two services in the same Railway project, sharing one Postgres addon:
 | Service | Build | Start |
 |---|---|---|
 | `Zimplixio_Office` | Railpack (auto-detected Next.js) | `npm run start` |
-| `Worker` | `Dockerfile.worker` | `/start-worker.sh` |
-
-The worker startup script (`scripts/start-worker.sh`) clones `Zimplixio_Marketing` at `MARKETING_REPO_REF`, creates a Python venv, installs from `requirements.txt`, and starts the worker process.
+| `Worker` | `Dockerfile.worker` | `npm run worker` |
 
 **Database migrations** are applied manually from your local machine (not as a Railway release command):
 
@@ -140,16 +115,3 @@ DATABASE_URL="<Railway DATABASE_PUBLIC_URL>" npx prisma migrate deploy
 Use `DATABASE_PUBLIC_URL` from the Postgres service variables (the internal hostname won't resolve from outside Railway).
 
 See `docs/RAILWAY.md` for the full setup guide, DNS configuration, and environment variable tables.
-
-## Agent architecture
-
-Every pipeline agent follows a 6-layer contract:
-
-1. **Directive** (`Zimplixio_Marketing/directives/`) — Markdown SOP: inputs, outputs, approval gates, edge cases
-2. **Execution** (`Zimplixio_Marketing/execution/`) — Deterministic Python scripts, one thing each (`noun_verb.py`)
-3. **Output contract** — JSON file schema validated by Zod in the worker handler
-4. **Worker handler** (`worker/src/handlers/`) — spawns scripts, emits `PipelineEvent` rows, writes to DB in a transaction
-5. **Database models** — Prisma schema is the single source of truth
-6. **API routes + UI** — list results, approve/reject; nothing leaves externally without explicit user action
-
-**Rule:** scheduled or batch AI operations live in Python. Interactive, user-triggered operations on a single record live in Next.js API routes.

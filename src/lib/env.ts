@@ -21,13 +21,6 @@ const ServerSchema = z.object({
   TWILIO_SMS_FROM: z.string().min(1).optional(),
   SMS_NOTIFY_TO: z.string().min(1).optional(),
 
-  VAPID_EMAIL: z.string().email('VAPID_EMAIL must be an email'),
-  VAPID_PRIVATE_KEY: z.string().min(1),
-
-  // LinkedIn publishing is stubbed; both vars are optional until wired up.
-  LINKEDIN_ACCESS_TOKEN: z.string().min(1).optional(),
-  LINKEDIN_AUTHOR_ID: z.string().min(1).optional(),
-
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
   // Phase 4 feature flag. When `true`, the web service enqueues a pg-boss job

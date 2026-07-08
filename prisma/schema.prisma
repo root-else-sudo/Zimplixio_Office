@@ -61,10 +61,12 @@ model Department {
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
-  goals     Goal[]
-  tasks     Task[]
-  knowledge Knowledge[]
-  kpis      Kpi[]
+  goals          Goal[]
+  tasks          Task[]
+  knowledge      Knowledge[]
+  kpis           Kpi[]
+  companyProfile CompanyProfile?
+  findings       Finding[]
 }
 
 // ─── Shared Department Anatomy ────────────────────────────────────────────────
@@ -137,4 +139,43 @@ model Kpi {
   updatedAt    DateTime   @updatedAt
 
   @@index([departmentId])
+}
+
+// ─── Product/Research — department-specific artifacts (planning §2) ──────────
+
+// The agent's fit lens (planning §2.1): freeform prose describing what
+// Zimplixio can credibly offer. Singleton per department (only
+// Product/Research has one so far).
+model CompanyProfile {
+  id           String     @id @default(cuid())
+  departmentId String     @unique
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  content      String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+enum FindingStatus {
+  CANDIDATE
+  VALIDATED
+  REJECTED
+}
+
+// A candidate service opportunity (planning §2.2). No fit rationale -> not a
+// valid Finding, per the doc, but that's enforced at the form/API layer, not
+// the schema, since Zod validation is the injection/shape boundary here.
+model Finding {
+  id              String        @id @default(cuid())
+  departmentId    String
+  department      Department    @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  title           String
+  evidence        String
+  fitRationale    String
+  status          FindingStatus @default(CANDIDATE)
+  rejectionReason String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([departmentId])
+  @@index([status])
 }
