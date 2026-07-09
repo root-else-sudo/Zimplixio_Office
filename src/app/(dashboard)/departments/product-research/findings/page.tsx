@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { FINDING_STATUS_STYLES } from '@/lib/findings'
 import RunResearchButton from '@/components/departments/RunResearchButton'
+import CandidateFindingRow from '@/components/departments/CandidateFindingRow'
 
 export default async function FindingsPage() {
   const department = await prisma.department.findUnique({
@@ -45,6 +46,9 @@ export default async function FindingsPage() {
       ) : (
         <div className="space-y-2">
           {findings.map((finding) => {
+            if (finding.status === 'CANDIDATE') {
+              return <CandidateFindingRow key={finding.id} finding={finding} />
+            }
             const style = FINDING_STATUS_STYLES[finding.status]
             return (
               <Link

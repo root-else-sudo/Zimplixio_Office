@@ -133,6 +133,32 @@ textarea:focus {
   cursor: not-allowed;
 }
 
+/* ── Destructive button — reserved for reject/delete confirmations ── */
+.btn-destructive {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--error);
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+.btn-destructive:hover:not(:disabled) {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+.btn-destructive:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* ── Outline / secondary button ── */
 .btn-outline {
   display: inline-flex;
