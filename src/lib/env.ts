@@ -9,6 +9,7 @@ const ServerSchema = z.object({
   NEXTAUTH_SECRET: z.string().min(32, 'NEXTAUTH_SECRET must be at least 32 chars'),
 
   ANTHROPIC_API_KEY: z.string().min(1, 'ANTHROPIC_API_KEY is required'),
+  TAVILY_API_KEY: z.string().min(1, 'TAVILY_API_KEY is required'),
 
   // Path to the Zimplixio_Marketing repo. Required by the worker (Phase 4);
   // optional in the web service since /api/pipeline currently shells out from

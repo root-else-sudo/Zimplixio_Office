@@ -20,8 +20,8 @@ Both services (`Zimplixio_Office` web + `Worker`) share the same env schema and 
 | `NEXTAUTH_URL` | yes | NextAuth callbacks |
 | `NEXTAUTH_SECRET` | yes (≥ 32 chars) | NextAuth JWT signing |
 | `AUTH_TRUST_HOST` | yes in production | NextAuth v5 — required behind the Cloudflare/Railway proxy |
-| `ANTHROPIC_API_KEY` | yes | `src/lib/ai-client.ts` — reusable Claude wrapper; consumed by the Research Agent once built (Increment 2+) |
-| `TAVILY_API_KEY` | not yet enforced | Not referenced by any code yet — needed once the Research Engine (Increment 3) is built. Worth having set in Railway ahead of time. |
+| `ANTHROPIC_API_KEY` | yes | `src/lib/ai-client.ts` — reusable Claude wrapper; used by the Research Engine's Hypothesize/Test calls |
+| `TAVILY_API_KEY` | yes | `src/lib/research/tavily.ts` — Gather step. Required on **both** services even though only the Worker calls Tavily — `serverEnv` is validated at boot on both (`src/instrumentation.ts`) |
 | `TWILIO_ACCOUNT_SID` | yes | `src/lib/twilio.ts` — MFA (TOTP) |
 | `TWILIO_AUTH_TOKEN` | yes | `src/lib/twilio.ts` — MFA (TOTP) |
 | `TWILIO_VERIFY_SERVICE_SID` | yes | TOTP MFA setup/verify |

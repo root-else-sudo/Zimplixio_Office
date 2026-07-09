@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { FINDING_STATUS_STYLES } from '@/lib/findings'
+import RunResearchButton from '@/components/departments/RunResearchButton'
 
 export default async function FindingsPage() {
   const department = await prisma.department.findUnique({
@@ -23,9 +24,12 @@ export default async function FindingsPage() {
             Candidate service opportunities
           </h1>
         </div>
-        <Link href="/departments/product-research/findings/new" className="btn-primary shrink-0">
-          New Finding
-        </Link>
+        <div className="flex items-start gap-3 shrink-0">
+          <RunResearchButton />
+          <Link href="/departments/product-research/findings/new" className="btn-primary">
+            New Finding
+          </Link>
+        </div>
       </div>
 
       {findings.length === 0 ? (

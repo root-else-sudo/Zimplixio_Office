@@ -4,15 +4,21 @@ import { logger } from './logger'
 
 // Job names. Strongly typed so enqueue / handler registration can't drift.
 // V1's jobs (pipeline.run, opportunities.find, linkedin.publish, drafts.stale-check)
-// are retired with the rest of the V1 schema. The Research Engine job (planning
-// §2.3/§4.4) is registered here once it's built (Increment 3).
-export const JOB_NAMES = {} as const
+// are retired with the rest of the V1 schema.
+export const JOB_NAMES = {
+  RESEARCH_RUN: 'research.run',
+} as const
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES]
 
-// Per-job payload shapes — populated as jobs are added.
+export interface ResearchRunPayload {
+  trigger: 'schedule' | 'run-now'
+  triggeredByUserId?: string
+}
+
+// Per-job payload shapes.
 export interface JobPayloads {
-  [key: string]: never
+  [JOB_NAMES.RESEARCH_RUN]: ResearchRunPayload
 }
 
 const globalForBoss = globalThis as unknown as { boss?: PgBoss }
