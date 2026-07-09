@@ -54,3 +54,18 @@ export const TEST_TOOL = {
     'Return one tested entry for every hypothesis provided, in the same order, with a confidence rating — do not omit any, even low-confidence ones.',
   input_schema: toJsonSchema(TestOutputSchema),
 }
+
+// ─── Distill (the learning loop) ────────────────────────────────────────────
+
+export const DistillOutputSchema = z.object({
+  summary: z.string().max(2000)
+    .describe('The rewritten Guidance Summary — a compacted plain-English paragraph or two, not a growing log. Replaces the previous summary entirely.'),
+})
+export type DistillOutput = z.infer<typeof DistillOutputSchema>
+
+export const DISTILL_TOOL = {
+  name: 'submit_guidance_summary',
+  description:
+    'Return the rewritten Guidance Summary that replaces the previous one, incorporating the new feedback.',
+  input_schema: toJsonSchema(DistillOutputSchema),
+}

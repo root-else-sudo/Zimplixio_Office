@@ -61,12 +61,13 @@ model Department {
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
-  goals          Goal[]
-  tasks          Task[]
-  knowledge      Knowledge[]
-  kpis           Kpi[]
-  companyProfile CompanyProfile?
-  findings       Finding[]
+  goals           Goal[]
+  tasks           Task[]
+  knowledge       Knowledge[]
+  kpis            Kpi[]
+  companyProfile  CompanyProfile?
+  guidanceSummary GuidanceSummary?
+  findings        Finding[]
 }
 
 // ─── Shared Department Anatomy ────────────────────────────────────────────────
@@ -151,6 +152,20 @@ model CompanyProfile {
   departmentId String     @unique
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   content      String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+// The second grounding input (planning §2.3): a plain-English distillation of
+// past validate/reject decisions, rewritten (not appended) each learning
+// cycle so it stays bounded. Owner-editable, same as CompanyProfile — an
+// edit's updatedAt becomes the new "already learned from this" watermark the
+// engine uses to find newly-reviewed Findings on the next run.
+model GuidanceSummary {
+  id           String     @id @default(cuid())
+  departmentId String     @unique
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  content      String     @default("")
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 }

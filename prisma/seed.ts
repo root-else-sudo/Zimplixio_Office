@@ -228,10 +228,29 @@ async function seedCompanyProfile() {
   console.log('Seeded Company Profile (draft)')
 }
 
+async function seedGuidanceSummary() {
+  const productResearch = await prisma.department.findUnique({
+    where: { key: 'PRODUCT_RESEARCH' },
+  })
+  if (!productResearch) return
+
+  await prisma.guidanceSummary.upsert({
+    where: { departmentId: productResearch.id },
+    update: {},
+    create: {
+      departmentId: productResearch.id,
+      content: '',
+    },
+  })
+
+  console.log('Seeded Guidance Summary (empty)')
+}
+
 async function main() {
   await seedAdminUser()
   await seedDepartments()
   await seedCompanyProfile()
+  await seedGuidanceSummary()
 }
 
 main()

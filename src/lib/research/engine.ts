@@ -5,11 +5,20 @@ import { gatherSignal } from './tavily'
 import {
   HYPOTHESIZE_TOOL,
   TEST_TOOL,
+  DISTILL_TOOL,
   HypothesizeOutputSchema,
   TestOutputSchema,
+  DistillOutputSchema,
   type Hypothesis,
 } from './schemas'
-import { HYPOTHESIZE_SYSTEM, TEST_SYSTEM, hypothesizeUserMessage, testUserMessage } from './prompts'
+import {
+  HYPOTHESIZE_SYSTEM,
+  TEST_SYSTEM,
+  DISTILL_SYSTEM,
+  hypothesizeUserMessage,
+  testUserMessage,
+  distillUserMessage,
+} from './prompts'
 import { isDuplicateTitle } from './dedupe'
 
 const MAX_FINDINGS_PER_RUN = 5
@@ -19,8 +28,12 @@ export type ResearchEngineResult =
   | { aborted: false; findingsCreated: number }
 
 // The Research Engine loop (planning §2.3): Ground -> Gather -> Hypothesize ->
-// Test -> Queue. Review (human gate) and Learn (Guidance Summary) are later
-// increments — this stops at Queue.
+// Test -> Queue -> (Review happens async, in the UI) -> Learn. Learn can't run
+// synchronously inside the job that produced the Findings being reviewed —
+// review happens at the owner's own pace — so it runs at the START of the
+// NEXT run instead, as part of Ground: distill whatever got validated/rejected
+// since the Guidance Summary's own updatedAt (which doubles as the
+// "already learned from this" watermark, including for a manual owner edit).
 //
 // Framework-agnostic on purpose: no pg-boss import here, so the pg-boss job
 // handler (worker/src/handlers/research.ts) stays a thin adapter and this
@@ -31,10 +44,9 @@ export async function runResearchEngine(opts: {
 }): Promise<ResearchEngineResult> {
   const start = Date.now()
   const log = logger.child({ route: 'research.engine', trigger: opts.trigger })
+  let distillCostUsd = 0
 
   // ── Ground ────────────────────────────────────────────────────────────
-  // Extension point: a future Guidance Summary (learning loop, Increment 5)
-  // would also be loaded here and folded into the prompts below.
   const department = await prisma.department.findUnique({ where: { key: 'PRODUCT_RESEARCH' } })
   const companyProfile = department
     ? await prisma.companyProfile.findUnique({ where: { departmentId: department.id } })
@@ -43,6 +55,68 @@ export async function runResearchEngine(opts: {
   if (!department || !companyProfile?.content.trim()) {
     log.info('research.engine: no Company Profile content, aborting before any API calls')
     return { aborted: true, reason: 'company_profile_empty' }
+  }
+
+  let guidanceSummary = await prisma.guidanceSummary.upsert({
+    where: { departmentId: department.id },
+    update: {},
+    create: { departmentId: department.id, content: '' },
+  })
+
+  const reviewedSinceLastLearn = await prisma.finding.findMany({
+    where: {
+      departmentId: department.id,
+      status: { in: ['VALIDATED', 'REJECTED'] },
+      updatedAt: { gt: guidanceSummary.updatedAt },
+    },
+    select: { title: true, status: true, rejectionReason: true },
+  })
+
+  if (reviewedSinceLastLearn.length > 0) {
+    const distillResponse = await callClaude({
+      model: MODELS.PRIMARY,
+      system: DISTILL_SYSTEM,
+      messages: [
+        {
+          role: 'user',
+          content: distillUserMessage({
+            currentSummary: guidanceSummary.content,
+            validatedTitles: reviewedSinceLastLearn
+              .filter((f) => f.status === 'VALIDATED')
+              .map((f) => f.title),
+            rejected: reviewedSinceLastLearn
+              .filter((f) => f.status === 'REJECTED')
+              .map((f) => ({ title: f.title, reason: f.rejectionReason ?? '(no reason recorded)' })),
+          }),
+        },
+      ],
+      maxTokens: 1_000,
+      tools: [DISTILL_TOOL],
+      forceTool: DISTILL_TOOL.name,
+      route: 'research.distill',
+      userId: opts.triggeredByUserId,
+    })
+    distillCostUsd = distillResponse.costUsd
+
+    const distillParsed = DistillOutputSchema.safeParse(distillResponse.toolInput)
+    if (!distillParsed.success) {
+      // A failed distill doesn't abort the whole run — Ground continues with
+      // the summary as it stood before this attempt. Worth surfacing, not
+      // worth losing an otherwise-good run over.
+      log.error(
+        { issues: distillParsed.error.issues, received: distillResponse.toolInput },
+        'research.engine: distill output failed validation, continuing with prior Guidance Summary'
+      )
+    } else {
+      guidanceSummary = await prisma.guidanceSummary.update({
+        where: { departmentId: department.id },
+        data: { content: distillParsed.data.summary },
+      })
+      log.info(
+        { reviewedCount: reviewedSinceLastLearn.length, costUsd: distillCostUsd },
+        'research.engine: distilled updated Guidance Summary'
+      )
+    }
   }
 
   const existingFindings = await prisma.finding.findMany({
@@ -67,6 +141,7 @@ export async function runResearchEngine(opts: {
         role: 'user',
         content: hypothesizeUserMessage({
           companyProfile: companyProfile.content,
+          guidanceSummary: guidanceSummary.content,
           existingTitles,
           signal,
         }),
@@ -101,7 +176,12 @@ export async function runResearchEngine(opts: {
     messages: [
       {
         role: 'user',
-        content: testUserMessage({ companyProfile: companyProfile.content, hypotheses, signal }),
+        content: testUserMessage({
+          companyProfile: companyProfile.content,
+          guidanceSummary: guidanceSummary.content,
+          hypotheses,
+          signal,
+        }),
       },
     ],
     maxTokens: 4_000,
@@ -140,10 +220,11 @@ export async function runResearchEngine(opts: {
     })
   }
 
-  const costUsd = hypothesizeResponse.costUsd + testResponse.costUsd
+  const costUsd = distillCostUsd + hypothesizeResponse.costUsd + testResponse.costUsd
   log.info(
     {
       durationMs: Date.now() - start,
+      distilled: distillCostUsd > 0,
       tavilyItems: signal.length,
       hypothesesGenerated: hypotheses.length,
       hypothesesTested: testParsed.data.testedHypotheses.length,
