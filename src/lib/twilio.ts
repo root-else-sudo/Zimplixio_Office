@@ -48,3 +48,11 @@ export async function verifyTotpCode(userId: string, factorSid: string, code: st
     })
   return challenge.status === 'approved'
 }
+
+export async function deleteTotpFactor(userId: string, factorSid: string) {
+  await getClient().verify.v2
+    .services(serverEnv.TWILIO_VERIFY_SERVICE_SID)
+    .entities(userId)
+    .factors(factorSid)
+    .remove()
+}

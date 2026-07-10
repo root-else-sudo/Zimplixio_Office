@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import {
-  LogOut, FlaskConical, Wrench, Megaphone, TrendingUp, DollarSign, Settings2,
+  LogOut, FlaskConical, Wrench, Megaphone, TrendingUp, DollarSign, Settings2, Settings,
   type LucideIcon,
 } from 'lucide-react'
 import { departmentSlug } from '@/lib/departments'
@@ -117,6 +117,17 @@ export default function Sidebar({ departments }: { departments: SidebarDepartmen
             <p className="text-xs capitalize" style={{ color: 'rgba(255,255,255,0.35)' }}>{userRole.toLowerCase()}</p>
           </div>
         </div>
+
+        <Link
+          href="/settings"
+          className="flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-sm font-medium transition-colors"
+          style={{ color: pathname === '/settings' ? '#fff' : 'rgba(255,255,255,0.4)', background: pathname === '/settings' ? 'var(--navy-700)' : undefined }}
+          onMouseEnter={e => { if (pathname !== '/settings') (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)' }}
+          onMouseLeave={e => { if (pathname !== '/settings') (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)' }}
+        >
+          <Settings className="w-4 h-4 shrink-0" />
+          Settings
+        </Link>
 
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}

@@ -7,15 +7,16 @@ This document describes the current authentication, authorization, validation, a
 - **Provider:** NextAuth v5 (beta) with the Credentials provider only.
 - **Password hashing:** `bcryptjs`. Hashes stored in `User.passwordHash`.
 - **Session:** JWT strategy. The token carries `id`, `role`, `mfaEnabled`, `mfaVerified`, and `mfaSecret`.
-- **MFA:** TOTP via Twilio Verify Service. After login, `mfaVerified` starts at `false`; the user is forced to `/verify-mfa` by `src/middleware.ts` until they submit a correct 6-digit code.
+- **MFA:** TOTP via Twilio Verify Service. After login, `mfaVerified` starts at `false`; the user is forced to `/verify-mfa` by `src/proxy.ts` (Next.js's middleware entry point) until they submit a correct 6-digit code. Enforcement isn't page-only: `withAuth` (see Authorization below) independently enforces `mfaEnabled && !mfaVerified → 403` on every wrapped API route by default, so a password-only session can't reach a mutating endpoint directly even if it never visits a page.
 - **Session cookie:** NextAuth defaults — `httpOnly`, `secure` in production, `sameSite=lax`.
 
 ## Authorization (RBAC)
 
 - **Roles:** `ADMIN`, `REVIEWER` (Prisma enum, source of truth).
-- **Wrapper:** `withAuth(handler, { role? })` in `src/lib/rbac.ts` enforces session presence and role on every wrapped handler. ADMIN implies all REVIEWER permissions (rank-based check, see `hasRole`).
+- **Wrapper:** `withAuth(handler, { role?, skipMfaCheck? })` in `src/lib/rbac.ts` enforces session presence, role, and (by default) MFA verification on every wrapped handler. ADMIN implies all REVIEWER permissions (rank-based check, see `hasRole`).
+- **MFA at the API layer:** unless a route passes `skipMfaCheck: true`, `withAuth` rejects any request where `session.user.mfaEnabled && !session.user.mfaVerified` with a 403. Only `POST /api/mfa/setup` and `POST /api/mfa/verify` opt out — they're how a session becomes verified in the first place, so exempting them is what keeps MFA enrollment/verification from locking itself out. `POST /api/mfa/disable` deliberately does **not** opt out: turning off your own second factor requires an already-MFA-verified session.
 - **Currently ADMIN-only:** nothing — no route uses `{ role: 'ADMIN' }` yet.
-- **REVIEWER+ (i.e. any authenticated user):** `POST /api/mfa/setup`, `POST /api/mfa/verify`, `PATCH /api/company-profile`, `POST /api/findings`, `GET/PATCH /api/findings/[id]`. No role-gating on the Product/Research artifacts — the team is two people and nothing in the v2 docs calls for restricting them.
+- **REVIEWER+ (i.e. any authenticated user):** `POST /api/mfa/setup`, `POST /api/mfa/verify`, `POST /api/mfa/disable`, `PATCH /api/company-profile`, `PATCH /api/guidance-summary`, `POST /api/findings`, `GET/PATCH /api/findings/[id]`, `POST /api/research/run`. No role-gating on the Product/Research artifacts — the team is two people and nothing in the v2 docs calls for restricting them.
 - **Public:** `/api/auth/[...nextauth]` (NextAuth's own routes).
 
 ## Input validation

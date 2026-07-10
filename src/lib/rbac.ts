@@ -29,6 +29,7 @@ export type AuthedHandler<P> = (
 
 export interface WithAuthOptions {
   role?: Role
+  skipMfaCheck?: boolean
 }
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
@@ -67,6 +68,9 @@ export function withAuth<P = Record<string, string>>(
     if (!session?.user?.id) return apiError('UNAUTHORIZED')
     if (opts.role && !hasRole(session.user.role, opts.role)) {
       return apiError('FORBIDDEN')
+    }
+    if (!opts.skipMfaCheck && session.user.mfaEnabled && !session.user.mfaVerified) {
+      return apiError('FORBIDDEN', 'MFA verification required')
     }
     return handler(req, ctx, session as AuthedSession)
   }

@@ -51,4 +51,4 @@ export const POST = withAuth(async (req: NextRequest, _ctx, session) => {
   } catch (err) {
     return toApiError(err, 'mfa.verify')
   }
-})
+}, { skipMfaCheck: true })
