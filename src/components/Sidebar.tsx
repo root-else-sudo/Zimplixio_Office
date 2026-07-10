@@ -72,7 +72,7 @@ export default function Sidebar({ departments }: { departments: SidebarDepartmen
           {departments.map(({ key, name, status }) => {
             const slug = departmentSlug(key)
             const href = `/departments/${slug}`
-            const active = pathname === href
+            const active = pathname.startsWith(href)
             const reserved = status === 'RESERVED'
             const Icon = DEPARTMENT_ICONS[key]
             return (

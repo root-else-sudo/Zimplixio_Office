@@ -61,8 +61,8 @@ export default function SetupMfaPage() {
     <div className="min-h-screen bg-[#0f2044] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-8">
         <div className="flex flex-col items-center mb-6">
-          <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-4">
-            <ShieldCheck className="w-6 h-6 text-indigo-600" />
+          <div className="w-12 h-12 bg-[var(--green-50)] rounded-xl flex items-center justify-center mb-4">
+            <ShieldCheck className="w-6 h-6 text-[var(--green-600)]" />
           </div>
           <h1 className="font-[family-name:var(--font-poppins)] font-bold text-xl text-gray-900">
             Set up Authenticator
@@ -76,7 +76,7 @@ export default function SetupMfaPage() {
           <button
             onClick={createFactor}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm py-3 rounded-xl transition-colors disabled:opacity-60"
+            className="btn-primary w-full justify-center"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Get started
@@ -99,13 +99,13 @@ export default function SetupMfaPage() {
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
               placeholder="000000"
-              className="w-full text-center text-2xl tracking-[0.5em] font-mono border border-gray-300 rounded-xl py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full text-center text-2xl tracking-[0.5em] font-mono border border-gray-300 rounded-xl py-3 focus:outline-none focus:ring-2 focus:ring-[var(--green-600)]"
             />
             {error && <p className="text-xs text-red-500">{error}</p>}
             <button
               onClick={verifyFactor}
               disabled={loading || code.length !== 6}
-              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm py-3 rounded-xl transition-colors disabled:opacity-60"
+              className="btn-primary w-full justify-center"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               Verify

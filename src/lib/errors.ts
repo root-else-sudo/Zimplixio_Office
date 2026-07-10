@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { logger } from './logger'
 
 export type ApiErrorCode =
   | 'UNAUTHORIZED'
@@ -46,7 +47,7 @@ export function toApiError(err: unknown, context?: string): NextResponse {
     )
   }
 
-  console.error(`[api] ${context ?? 'unhandled'}:`, err)
+  logger.error({ err, context }, 'unhandled API error')
   return NextResponse.json(
     { error: 'Internal server error', code: 'INTERNAL_ERROR' },
     { status: 500 }

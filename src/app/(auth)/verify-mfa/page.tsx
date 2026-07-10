@@ -42,8 +42,8 @@ export default function VerifyMfaPage() {
       <div className="w-full max-w-sm">
         <div className="bg-white rounded-2xl p-8 shadow-2xl">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5 text-indigo-600" />
+            <div className="w-10 h-10 bg-[var(--green-50)] rounded-xl flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5 text-[var(--green-600)]" />
             </div>
             <div>
               <h1 className="font-[family-name:var(--font-poppins)] font-bold text-lg text-gray-900">
@@ -61,7 +61,7 @@ export default function VerifyMfaPage() {
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
               placeholder="000000"
-              className="w-full text-center text-2xl tracking-[0.5em] px-3.5 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full text-center text-2xl tracking-[0.5em] px-3.5 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[var(--green-600)]"
               required
             />
 
@@ -72,7 +72,7 @@ export default function VerifyMfaPage() {
             <button
               type="submit"
               disabled={loading || code.length < 6}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
+              className="btn-primary w-full justify-center"
             >
               {loading ? 'Verifying…' : 'Verify'}
             </button>
