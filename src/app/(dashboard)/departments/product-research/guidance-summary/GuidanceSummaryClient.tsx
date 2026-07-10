@@ -50,7 +50,7 @@ export default function GuidanceSummaryClient({ initialContent }: { initialConte
         <p className="text-sm" style={{ color: 'var(--error)' }}>{error}</p>
       )}
       {savedAt && !error && (
-        <p className="text-sm" style={{ color: 'var(--green-600)' }}>Saved.</p>
+        <p className="text-sm" style={{ color: 'var(--success)' }}>Saved.</p>
       )}
 
       <div className="soft-card p-6">
