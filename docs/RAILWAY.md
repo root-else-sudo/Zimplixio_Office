@@ -66,7 +66,11 @@ SSL/TLS mode: **Full** (not Flexible).
 
 ### Database migration
 
-Migrations are applied manually via local CLI (not as a Railway release command):
+As of 2026-07-12, migrations run automatically on every deploy via Railway's **pre-deploy command** (`railway.toml`'s `[deploy] preDeployCommand = ["npx prisma migrate deploy"]`) — it runs after build, before the new container starts serving traffic, and the deploy is blocked (doesn't go live) if the migration fails. This closes the previous gap where a schema change could be pushed and deployed before anyone remembered to also migrate Railway's database by hand.
+
+**Open question, not yet verified against a live deploy:** `railway.toml` lives at the repo root, and both the `Zimplixio_Office` and `Worker` services build from this same repo — it's not yet confirmed in the Railway dashboard whether the `Worker` service (which uses `Dockerfile.worker`, not Nixpacks) also picks up this `[deploy]` setting. If it does, `prisma migrate deploy` would run twice per push (once per service) — harmless since it's idempotent and Prisma takes an advisory lock while applying, just a few redundant seconds. Check the next real deploy's logs on both services to confirm the pre-deploy step actually ran, and on which service(s).
+
+Manual migration is still the right tool for a one-off, out-of-band schema change independent of a deploy (e.g. testing a migration against Railway before committing it):
 
 ```bash
 DATABASE_URL="<Railway public URL>" npx prisma migrate deploy
