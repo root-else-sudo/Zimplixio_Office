@@ -18,6 +18,13 @@ export interface ProbeSignalItemInput {
 
 const MAX_CONTENT_CHARS = 1500
 const PER_CALL_TIMEOUT_MS = 20_000
+// Tavily's extract() and search() disagree on the unit of their `timeout`
+// option — search() takes milliseconds, extract() takes seconds (1-120) and
+// throws "timeout must be between 1 and 120 seconds" otherwise. Confirmed
+// directly against the real API: passing PER_CALL_TIMEOUT_MS (20_000) to
+// extract() made every extract() call fail silently (caught below), which is
+// why manually-supplied URLs never produced any TAVILY_EXTRACT signal items.
+const EXTRACT_TIMEOUT_SECONDS = 20
 
 // Gather signal about ONE named company — manual notes the owner typed in,
 // optional URLs the owner supplies (fetched directly via Tavily's extract()),
@@ -42,7 +49,7 @@ export async function gatherProbeSignal(opts: {
     try {
       const extractRes = await client.extract(opts.urls, {
         extractDepth: 'advanced',
-        timeout: PER_CALL_TIMEOUT_MS,
+        timeout: EXTRACT_TIMEOUT_SECONDS,
       })
       for (const result of extractRes.results) {
         items.push({
