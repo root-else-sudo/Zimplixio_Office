@@ -16,7 +16,7 @@ This document describes the current authentication, authorization, validation, a
 - **Wrapper:** `withAuth(handler, { role?, skipMfaCheck? })` in `src/lib/rbac.ts` enforces session presence, role, and (by default) MFA verification on every wrapped handler. ADMIN implies all REVIEWER permissions (rank-based check, see `hasRole`).
 - **MFA at the API layer:** unless a route passes `skipMfaCheck: true`, `withAuth` rejects any request where `session.user.mfaEnabled && !session.user.mfaVerified` with a 403. Only `POST /api/mfa/setup` and `POST /api/mfa/verify` opt out — they're how a session becomes verified in the first place, so exempting them is what keeps MFA enrollment/verification from locking itself out. `POST /api/mfa/disable` deliberately does **not** opt out: turning off your own second factor requires an already-MFA-verified session.
 - **Currently ADMIN-only:** nothing — no route uses `{ role: 'ADMIN' }` yet.
-- **REVIEWER+ (i.e. any authenticated user):** `POST /api/mfa/setup`, `POST /api/mfa/verify`, `POST /api/mfa/disable`, `PATCH /api/company-profile`, `PATCH /api/guidance-summary`, `POST /api/findings`, `GET/PATCH /api/findings/[id]`, `POST /api/research/run`. No role-gating on the Product/Research artifacts — the team is two people and nothing in the v2 docs calls for restricting them.
+- **REVIEWER+ (i.e. any authenticated user):** `POST /api/mfa/setup`, `POST /api/mfa/verify`, `POST /api/mfa/disable`, `PATCH /api/company-profile`, `PATCH /api/guidance-summary`, `POST /api/findings`, `GET/PATCH /api/findings/[id]`, `POST /api/research/run`, `GET /api/research/run/[jobId]`, `POST /api/research-probe/run` (the separate Research Probe feature — see `CLAUDE.md`'s CRM v2 section). No role-gating on the Product/Research artifacts — the team is two people and nothing in the v2 docs calls for restricting them.
 - **Public:** `/api/auth/[...nextauth]` (NextAuth's own routes).
 
 ## Input validation
@@ -34,8 +34,11 @@ This document describes the current authentication, authorization, validation, a
 - Postgres-backed fixed-window limiter in `src/lib/ratelimit.ts`.
 - Persisted in the `RateLimit` model (key + count + windowStart).
 - Applied at:
+  - Login itself — `src/lib/auth.ts`'s credentials `authorize()` — 5 attempts / 15 min / email, checked before the password comparison. A rate-limited attempt returns `null`, identical to a wrong password, so it never reveals to an attacker that they've been throttled.
   - `POST /api/mfa/verify` — 5 attempts / 15 min / userId.
-- Not yet applied to the Company Profile / Findings routes — they're plain DB writes, not paid-API-triggering, so this matches the v2 security doc's guidance (rate limit login/MFA and anything that triggers paid API calls). Revisit once the Research Agent's "Run now" trigger exists (Increment 3+).
+  - `POST /api/research/run` — 1 run / 5 min / userId (paid-API-triggering).
+  - `POST /api/research-probe/run` — 1 run / 2 min / userId (also paid-API-triggering; shorter window since its actual usage pattern is testing several companies back-to-back in one sitting, not a single weekly-cadence trigger).
+- Not applied to the Company Profile / Findings / Guidance Summary routes — they're plain DB writes, not paid-API-triggering, so this matches the v2 security doc's guidance (rate limit login/MFA and anything that triggers paid API calls). This guidance is now fully implemented across every paid-API route in the app, not just aspirational.
 - 429 responses include a `Retry-After` header (seconds).
 - Upgrade path: switch to `@upstash/ratelimit` (Redis) if Postgres write contention becomes a problem. For a small admin site this is unlikely.
 
@@ -69,4 +72,4 @@ The path to a stricter CSP is a nonce-based middleware pattern that drops `'unsa
 ## Operational notes
 
 - **Locking yourself out:** if RBAC changes break access, use the Railway shell to open `npx prisma studio` and flip the affected user's `role` to `ADMIN`. A `npm run promote-admin <email>` helper should be added before this surface is shared with another human.
-- **Monitoring:** structured logging (Phase 2) will land in `src/lib/logger.ts`. Until then, error responses log via `console.error` with a route-prefixed context tag (e.g. `[api] posts.patch:`).
+- **Monitoring:** structured logging is live — `src/lib/logger.ts` (pino, with the redaction list described above) is fully wired. Unhandled route errors funnel through `toApiError()` (`src/lib/errors.ts`), which logs via `logger.error({ err, context }, 'unhandled API error')` — not `console.error`. A repo-wide grep confirms zero `console.error` calls remain in `src/app/api` or `src/lib`.

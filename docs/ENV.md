@@ -20,8 +20,8 @@ Both services (`Zimplixio_Office` web + `Worker`) share the same env schema and 
 | `NEXTAUTH_URL` | yes | NextAuth callbacks |
 | `NEXTAUTH_SECRET` | yes (≥ 32 chars) | NextAuth JWT signing |
 | `AUTH_TRUST_HOST` | yes in production | NextAuth v5 — required behind the Cloudflare/Railway proxy |
-| `ANTHROPIC_API_KEY` | yes | `src/lib/ai-client.ts` — reusable Claude wrapper; used by the Research Engine's Hypothesize/Test calls |
-| `TAVILY_API_KEY` | yes | `src/lib/research/tavily.ts` — Gather step. Required on **both** services even though only the Worker calls Tavily — `serverEnv` is validated at boot on both (`src/instrumentation.ts`) |
+| `ANTHROPIC_API_KEY` | yes | `src/lib/ai-client.ts` — reusable Claude wrapper; used by the Research Engine's Hypothesize/Test calls (Worker) and the Research Probe's Hypothesize/Test calls (`src/lib/research-probe/`, called directly from the web service) |
+| `TAVILY_API_KEY` | yes | `src/lib/research/tavily.ts` — Research Engine's Gather step (Worker) — and `src/lib/research-probe/gather.ts` — Research Probe's Gather step, called directly from the **web** service via `POST /api/research-probe/run` (synchronous, no job queue). Required on both services; `serverEnv` is validated at boot on both (`src/instrumentation.ts`) |
 | `TWILIO_ACCOUNT_SID` | yes | `src/lib/twilio.ts` — MFA (TOTP) |
 | `TWILIO_AUTH_TOKEN` | yes | `src/lib/twilio.ts` — MFA (TOTP) |
 | `TWILIO_VERIFY_SERVICE_SID` | yes | TOTP MFA setup/verify |

@@ -11,9 +11,9 @@ The project deploys as **two Railway services in one project**, sharing one Post
 │  npm run start              │         │  npm run worker             │
 │                             │         │                             │
 │  - HTTP API + UI            │         │  - pg-boss job handlers     │
-│  - Enqueues pg-boss jobs    │         │    (none registered yet —   │
-│                             │         │    Research Engine lands    │
-│                             │         │    here in Increment 3)     │
+│  - Enqueues pg-boss jobs    │         │    (research.run — weekly   │
+│  - Also calls Tavily/Claude │         │    cron + on-demand)        │
+│    directly (Research Probe)│         │                             │
 └──────────────┬──────────────┘         └──────────────┬──────────────┘
                │                                        │
                └─────────────┬──────────────────────────┘
@@ -48,6 +48,7 @@ Railpack auto-detects Next.js. No custom build command needed. `railway.toml` se
 | `NEXTAUTH_SECRET` | 32+ char random string |
 | `AUTH_TRUST_HOST` | `1` — required when running behind Cloudflare proxy |
 | `ANTHROPIC_API_KEY` | Anthropic console |
+| `TAVILY_API_KEY` | Tavily console — required here too: the Research Probe feature calls Tavily directly from this service, not just the Worker |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID` | Twilio console — MFA |
 | `LOG_LEVEL` | `info` |
 
@@ -94,7 +95,7 @@ Same schema as the web service — see `docs/ENV.md`. No worker-only vars right 
 
 ### Sizing
 
-Minimal right now — no jobs are registered. Revisit once the Research Engine (Ground→Gather→Hypothesize→Test→Queue, Increment 3) lands; that will involve LLM calls and web scraping.
+Runs the Research Engine (Ground→Gather→Hypothesize→Test→Queue) on a weekly schedule (Monday 08:00 UTC) plus on-demand via the "Run now" button — each run makes LLM calls (Claude) and web searches (Tavily). Load is low-frequency and bursty rather than sustained; revisit sizing if a future department adds its own scheduled job.
 
 ## Local development
 
