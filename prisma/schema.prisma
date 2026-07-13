@@ -68,6 +68,7 @@ model Department {
   companyProfile  CompanyProfile?
   guidanceSummary GuidanceSummary?
   findings        Finding[]
+  probeRuns       ProbeRun[]
 }
 
 // ─── Shared Department Anatomy ────────────────────────────────────────────────
@@ -193,4 +194,72 @@ model Finding {
 
   @@index([departmentId])
   @@index([status])
+}
+
+// ─── Research Probe (POC — fully isolated from the Research Engine above) ────
+
+model ProbeRun {
+  id           String         @id @default(cuid())
+  departmentId String
+  department   Department     @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  companyName  String
+  manualNotes  String?
+  status       ProbeRunStatus @default(RUNNING)
+  errorMessage String?
+  costUsd      Float?
+  createdAt    DateTime       @default(now())
+  completedAt  DateTime?
+
+  signalItems ProbeSignalItem[]
+  hypotheses  ProbeHypothesis[]
+
+  @@index([departmentId])
+}
+
+enum ProbeRunStatus {
+  RUNNING
+  COMPLETE
+  FAILED
+}
+
+model ProbeSignalItem {
+  id        String            @id @default(cuid())
+  runId     String
+  run       ProbeRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  source    ProbeSignalSource
+  title     String?
+  url       String?
+  content   String
+  createdAt DateTime          @default(now())
+
+  @@index([runId])
+}
+
+enum ProbeSignalSource {
+  MANUAL
+  TAVILY_SEARCH
+  TAVILY_EXTRACT
+}
+
+model ProbeHypothesis {
+  id                    String           @id @default(cuid())
+  runId                 String
+  run                   ProbeRun         @relation(fields: [runId], references: [id], onDelete: Cascade)
+  need                  String
+  proposedService       String
+  basedOnSignal         String[]
+  title                 String?
+  evidence              String?
+  fitRationale          String?
+  confidence            ProbeConfidence?
+  disconfirmingEvidence String?
+  createdAt             DateTime         @default(now())
+
+  @@index([runId])
+}
+
+enum ProbeConfidence {
+  LOW
+  MEDIUM
+  HIGH
 }

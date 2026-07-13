@@ -8,6 +8,7 @@ const TABS = [
   { href: '/departments/product-research/company-profile', label: 'Company Profile' },
   { href: '/departments/product-research/guidance-summary', label: 'Guidance Summary' },
   { href: '/departments/product-research/findings', label: 'Findings' },
+  { href: '/departments/product-research/workflow', label: 'Workflow' },
 ]
 
 export default function ProductResearchTabs() {
