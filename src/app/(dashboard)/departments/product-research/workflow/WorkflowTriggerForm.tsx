@@ -73,6 +73,9 @@ export default function WorkflowTriggerForm() {
         <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--gray-900)' }}>
           URLs to fetch directly (optional, one per line)
         </label>
+        <p className="text-xs mb-1.5" style={{ color: 'var(--gray-600)' }}>
+          Direct listing pages (e.g. a specific job posting) extract better than search-results pages (e.g. Indeed&apos;s job search).
+        </p>
         <textarea
           value={urlsText}
           onChange={(e) => setUrlsText(e.target.value)}

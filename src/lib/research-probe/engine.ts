@@ -2,6 +2,7 @@ import { prisma } from '../prisma'
 import { logger } from '../logger'
 import { callClaude, MODELS } from '../ai-client'
 import { gatherProbeSignal } from './gather'
+import { ProbeSignalSource } from '@prisma/client'
 import {
   PROBE_HYPOTHESIZE_TOOL,
   PROBE_TEST_TOOL,
@@ -50,29 +51,41 @@ export async function runResearchProbe(opts: {
       return { runId: run.id }
     }
 
-    const signal = await gatherProbeSignal({
+    const { items, failures } = await gatherProbeSignal({
       companyName: opts.companyName,
       manualNotes: opts.manualNotes,
       urls: opts.urls,
     })
 
-    if (signal.length === 0) {
+    if (items.length + failures.length > 0) {
+      const signalData: Array<{ runId: string; source: ProbeSignalSource; title: string | null; url: string | null; content: string }> = [
+        ...items.map((item) => ({
+          runId: run.id,
+          source: (item.group === 'manual' ? 'MANUAL' : item.group === 'tavily_search' ? 'TAVILY_SEARCH' : 'TAVILY_EXTRACT') as ProbeSignalSource,
+          title: item.title,
+          url: item.url,
+          content: item.content,
+        })),
+        ...failures.map((failure) => ({
+          runId: run.id,
+          source: 'EXTRACT_FAILED' as ProbeSignalSource,
+          title: null,
+          url: failure.url,
+          content: failure.error,
+        })),
+      ]
+      await prisma.probeSignalItem.createMany({
+        data: signalData,
+      })
+    }
+
+    if (items.length === 0) {
       await prisma.probeRun.update({
         where: { id: run.id },
         data: { status: 'FAILED', errorMessage: 'No signal gathered — nothing to reason about', completedAt: new Date() },
       })
       return { runId: run.id }
     }
-
-    await prisma.probeSignalItem.createMany({
-      data: signal.map((item) => ({
-        runId: run.id,
-        source: item.group === 'manual' ? 'MANUAL' : item.group === 'tavily_search' ? 'TAVILY_SEARCH' : 'TAVILY_EXTRACT',
-        title: item.title,
-        url: item.url,
-        content: item.content,
-      })),
-    })
 
     const hypothesizeResponse = await callClaude({
       model: MODELS.PRIMARY,
@@ -83,7 +96,7 @@ export async function runResearchProbe(opts: {
           content: probeHypothesizeUserMessage({
             companyName: opts.companyName,
             companyProfile: companyProfile.content,
-            signal,
+            signal: items,
           }),
         },
       ],
@@ -126,7 +139,7 @@ export async function runResearchProbe(opts: {
             companyName: opts.companyName,
             companyProfile: companyProfile.content,
             hypotheses,
-            signal,
+            signal: items,
           }),
         },
       ],

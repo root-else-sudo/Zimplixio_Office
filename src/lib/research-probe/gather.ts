@@ -16,7 +16,23 @@ export interface ProbeSignalItemInput {
   content: string
 }
 
-const MAX_CONTENT_CHARS = 1500
+export interface ProbeSignalFailure {
+  url: string
+  error: string
+}
+
+export interface ProbeSignalResult {
+  items: ProbeSignalItemInput[]
+  failures: ProbeSignalFailure[]
+}
+
+// extract()'s rawContent is the full raw page (can run 15k+ chars on
+// nav/boilerplate-heavy sites); search()'s content field is Tavily's own
+// curated snippet (observed 2,000-2,400 chars live). Different budgets on
+// purpose, not one shared constant — same reasoning as PER_CALL_TIMEOUT_MS
+// vs EXTRACT_TIMEOUT_SECONDS below.
+export const EXTRACT_MAX_CONTENT_CHARS = 3000
+export const SEARCH_MAX_CONTENT_CHARS = 3000
 const PER_CALL_TIMEOUT_MS = 20_000
 // Tavily's extract() and search() disagree on the unit of their `timeout`
 // option — search() takes milliseconds, extract() takes seconds (1-120) and
@@ -26,18 +42,36 @@ const PER_CALL_TIMEOUT_MS = 20_000
 // why manually-supplied URLs never produced any TAVILY_EXTRACT signal items.
 const EXTRACT_TIMEOUT_SECONDS = 20
 
+// Steers extract() toward actual page content instead of a raw
+// front-of-page dump — verified live against hillpointe.com/careers/:
+// without this, the first EXTRACT_MAX_CONTENT_CHARS were 100% cookie-consent
+// text and nav links; with it, the same call opens with real page content.
+// Deliberately broad (not job-posting-specific) since owner-pasted URLs can
+// be any page type — a review site, a news article, a LinkedIn company page.
+const EXTRACT_RELEVANCE_QUERY =
+  'job responsibilities, open positions, employee reviews, workplace culture, hiring needs, organizational challenges, growth or expansion signals'
+const EXTRACT_CHUNKS_PER_SOURCE = 3
+
+function normalizeUrl(url: string): string {
+  return url.trim().replace(/\/+$/, '')
+}
+
 // Gather signal about ONE named company — manual notes the owner typed in,
 // optional URLs the owner supplies (fetched directly via Tavily's extract()),
 // and a small set of targeted search() queries against the company name.
 // Deliberately different from src/lib/research/tavily.ts's gatherSignal(),
 // which runs a fixed set of generic market-wide queries — this is scoped to
-// one company on purpose (design doc §4).
+// one company on purpose (design doc §4). Deduplicates by normalized URL
+// across extract + search results (extract wins — it's owner-curated), and
+// reports any URL Tavily failed to extract instead of dropping it silently.
 export async function gatherProbeSignal(opts: {
   companyName: string
   manualNotes?: string
   urls?: string[]
-}): Promise<ProbeSignalItemInput[]> {
+}): Promise<ProbeSignalResult> {
   const items: ProbeSignalItemInput[] = []
+  const failures: ProbeSignalFailure[] = []
+  const seenUrls = new Set<string>()
 
   if (opts.manualNotes && opts.manualNotes.trim()) {
     items.push({ group: 'manual', title: null, url: null, content: opts.manualNotes.trim() })
@@ -50,17 +84,27 @@ export async function gatherProbeSignal(opts: {
       const extractRes = await client.extract(opts.urls, {
         extractDepth: 'advanced',
         timeout: EXTRACT_TIMEOUT_SECONDS,
+        query: EXTRACT_RELEVANCE_QUERY,
+        chunksPerSource: EXTRACT_CHUNKS_PER_SOURCE,
       })
       for (const result of extractRes.results) {
+        seenUrls.add(normalizeUrl(result.url))
         items.push({
           group: 'tavily_extract',
           title: result.title,
           url: result.url,
-          content: result.rawContent.slice(0, MAX_CONTENT_CHARS),
+          content: result.rawContent.slice(0, EXTRACT_MAX_CONTENT_CHARS),
         })
+      }
+      for (const failed of extractRes.failedResults) {
+        failures.push({ url: failed.url, error: failed.error })
       }
     } catch (err) {
       logger.warn({ err }, 'research-probe.gather: extract failed, continuing')
+      const message = err instanceof Error ? err.message : 'Unknown extract error'
+      for (const url of opts.urls) {
+        failures.push({ url, error: message })
+      }
     }
   }
 
@@ -86,19 +130,22 @@ export async function gatherProbeSignal(opts: {
       continue
     }
     for (const result of outcome.value.res.results) {
+      const normalized = normalizeUrl(result.url)
+      if (seenUrls.has(normalized)) continue
+      seenUrls.add(normalized)
       items.push({
         group: 'tavily_search',
         title: result.title,
         url: result.url,
-        content: result.content.slice(0, MAX_CONTENT_CHARS),
+        content: result.content.slice(0, SEARCH_MAX_CONTENT_CHARS),
       })
     }
   }
 
   logger.info(
-    { companyName: opts.companyName, items: items.length },
+    { companyName: opts.companyName, items: items.length, failures: failures.length },
     'research-probe.gather: complete'
   )
 
-  return items
+  return { items, failures }
 }

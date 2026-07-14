@@ -1,10 +1,17 @@
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
+import { EXTRACT_MAX_CONTENT_CHARS, SEARCH_MAX_CONTENT_CHARS } from '@/lib/research-probe/gather'
 
 const CONFIDENCE_STYLE: Record<string, { bg: string; color: string }> = {
   HIGH: { bg: 'var(--green-50)', color: 'var(--green-600)' },
   MEDIUM: { bg: 'var(--copper-100)', color: 'var(--copper-500)' },
   LOW: { bg: '#F3F4F6', color: 'var(--gray-600)' },
+}
+
+function truncationCapFor(source: string): number | null {
+  if (source === 'TAVILY_EXTRACT') return EXTRACT_MAX_CONTENT_CHARS
+  if (source === 'TAVILY_SEARCH') return SEARCH_MAX_CONTENT_CHARS
+  return null
 }
 
 export default async function WorkflowRunDetailPage({ params }: { params: Promise<{ runId: string }> }) {
@@ -17,6 +24,9 @@ export default async function WorkflowRunDetailPage({ params }: { params: Promis
     },
   })
   if (!run) notFound()
+
+  const signalItems = run.signalItems.filter((item) => item.source !== 'EXTRACT_FAILED')
+  const failedExtracts = run.signalItems.filter((item) => item.source === 'EXTRACT_FAILED')
 
   return (
     <div className="max-w-4xl mx-auto px-8 py-10 space-y-8">
@@ -32,22 +42,47 @@ export default async function WorkflowRunDetailPage({ params }: { params: Promis
         </p>
       </div>
 
+      {failedExtracts.length > 0 && (
+        <section className="space-y-3">
+          <p className="eyebrow">Extraction issues ({failedExtracts.length})</p>
+          {failedExtracts.map((item) => (
+            <div key={item.id} className="soft-card px-5 py-4 space-y-1">
+              {item.url && (
+                <a href={item.url} target="_blank" rel="noreferrer" className="text-xs underline break-all" style={{ color: 'var(--gray-600)' }}>
+                  {item.url}
+                </a>
+              )}
+              <p className="text-sm" style={{ color: 'var(--error)' }}>{item.content}</p>
+            </div>
+          ))}
+        </section>
+      )}
+
       <section className="space-y-3">
-        <p className="eyebrow">Signal gathered ({run.signalItems.length})</p>
-        {run.signalItems.map((item) => (
-          <div key={item.id} className="soft-card px-5 py-4 space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--copper-500)' }}>
-              {item.source}
-              {item.title ? ` — ${item.title}` : ''}
-            </p>
-            {item.url && (
-              <a href={item.url} target="_blank" rel="noreferrer" className="text-xs underline break-all" style={{ color: 'var(--gray-600)' }}>
-                {item.url}
-              </a>
-            )}
-            <p className="text-sm" style={{ color: 'var(--gray-900)' }}>{item.content}</p>
-          </div>
-        ))}
+        <p className="eyebrow">Signal gathered ({signalItems.length})</p>
+        {signalItems.map((item) => {
+          const cap = truncationCapFor(item.source)
+          const truncated = cap !== null && item.content.length === cap
+          return (
+            <div key={item.id} className="soft-card px-5 py-4 space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--copper-500)' }}>
+                {item.source}
+                {item.title ? ` — ${item.title}` : ''}
+              </p>
+              {item.url && (
+                <a href={item.url} target="_blank" rel="noreferrer" className="text-xs underline break-all" style={{ color: 'var(--gray-600)' }}>
+                  {item.url}
+                </a>
+              )}
+              <p className="text-sm" style={{ color: 'var(--gray-900)' }}>{item.content}</p>
+              {truncated && (
+                <p className="text-xs italic" style={{ color: 'var(--gray-600)' }}>
+                  (truncated at {(cap / 1000).toFixed(1)}k chars)
+                </p>
+              )}
+            </div>
+          )
+        })}
       </section>
 
       <section className="space-y-3">
