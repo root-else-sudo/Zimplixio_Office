@@ -46,7 +46,15 @@ export async function reviewSignal(opts: {
         }),
       },
     ],
-    maxTokens: 2_000,
+    // 2_000 was fine for verdicts alone but not once cleanedContent (up to
+    // 4,000 chars per item, for however many of the batch need it) entered
+    // the schema — confirmed live: with a real 15-item batch, this call hit
+    // max_tokens and silently failed schema validation 1 time in 4, which
+    // fails open (includes everything, cleans nothing) with no visible error.
+    // Worst case here is roughly 15 reasons (~75 tokens each) plus a few
+    // items' cleanedContent (~1,000 tokens each) plus JSON overhead — 6_000
+    // gives real headroom over that, not just a bump that still clips later.
+    maxTokens: 6_000,
     tools: [PROBE_REVIEW_TOOL],
     forceTool: PROBE_REVIEW_TOOL.name,
     route: 'research-probe.review',
