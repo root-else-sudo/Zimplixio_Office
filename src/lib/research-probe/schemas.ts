@@ -54,3 +54,45 @@ export const PROBE_TEST_TOOL = {
     'Return one tested entry for every hypothesis provided, in the same order, with a confidence rating — do not omit any.',
   input_schema: toJsonSchema(ProbeTestOutputSchema),
 }
+
+// ─── Review (signal-quality gate before Hypothesize) ───────────────────────
+
+export const ProbeSignalReviewItemSchema = z.object({
+  index: z.number().int().min(0)
+    .describe('The 0-based index of the signal item this verdict is for, matching the order it was given in.'),
+  include: z.boolean()
+    .describe('true if this item is genuinely about the named company and not a duplicate of an earlier item; false to exclude it from the reasoning stage.'),
+  reason: z.string().min(1).max(300)
+    .describe('One concise sentence explaining the verdict — required for both include and exclude, so every call can be audited.'),
+})
+export type ProbeSignalReviewItem = z.infer<typeof ProbeSignalReviewItemSchema>
+
+export const ProbeSignalReviewOutputSchema = z.object({
+  // One entry per item received, in the same order — no filtering here,
+  // every item gets a verdict so a bad call can be audited (mirrors the
+  // Test stage's "do not silently drop any" discipline).
+  reviewed: z.array(ProbeSignalReviewItemSchema),
+})
+export type ProbeSignalReviewOutput = z.infer<typeof ProbeSignalReviewOutputSchema>
+
+export const PROBE_REVIEW_TOOL = {
+  name: 'submit_probe_signal_review',
+  description:
+    'Return one verdict for every gathered signal item, in the same order, judging whether it is genuinely about the named company and not a duplicate of an earlier item — do not omit any.',
+  input_schema: toJsonSchema(ProbeSignalReviewOutputSchema),
+}
+
+// ─── Review Guidance distillation (the Review step's own learning loop) ────
+
+export const ProbeReviewDistillOutputSchema = z.object({
+  guidance: z.string().max(2000)
+    .describe('The rewritten Review Guidance — a compacted plain-English paragraph or two of general noise patterns, not a growing log. Replaces the previous guidance entirely.'),
+})
+export type ProbeReviewDistillOutput = z.infer<typeof ProbeReviewDistillOutputSchema>
+
+export const PROBE_REVIEW_DISTILL_TOOL = {
+  name: 'submit_probe_review_guidance',
+  description:
+    "Return the rewritten Review Guidance that replaces the previous one, incorporating this run's exclusion patterns.",
+  input_schema: toJsonSchema(ProbeReviewDistillOutputSchema),
+}

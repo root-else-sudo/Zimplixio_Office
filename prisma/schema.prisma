@@ -61,14 +61,15 @@ model Department {
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
-  goals           Goal[]
-  tasks           Task[]
-  knowledge       Knowledge[]
-  kpis            Kpi[]
-  companyProfile  CompanyProfile?
-  guidanceSummary GuidanceSummary?
-  findings        Finding[]
-  probeRuns       ProbeRun[]
+  goals               Goal[]
+  tasks               Task[]
+  knowledge           Knowledge[]
+  kpis                Kpi[]
+  companyProfile      CompanyProfile?
+  guidanceSummary     GuidanceSummary?
+  findings            Finding[]
+  probeRuns           ProbeRun[]
+  probeReviewGuidance ProbeReviewGuidance?
 }
 
 // ─── Shared Department Anatomy ────────────────────────────────────────────────
@@ -223,14 +224,16 @@ enum ProbeRunStatus {
 }
 
 model ProbeSignalItem {
-  id        String            @id @default(cuid())
-  runId     String
-  run       ProbeRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
-  source    ProbeSignalSource
-  title     String?
-  url       String?
-  content   String
-  createdAt DateTime          @default(now())
+  id                  String            @id @default(cuid())
+  runId               String
+  run                 ProbeRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  source              ProbeSignalSource
+  title               String?
+  url                 String?
+  content             String
+  includedInReasoning Boolean           @default(true)
+  exclusionReason     String?
+  createdAt           DateTime          @default(now())
 
   @@index([runId])
 }
@@ -263,4 +266,18 @@ enum ProbeConfidence {
   LOW
   MEDIUM
   HIGH
+}
+
+// The Review step's own learning loop (2026-07-15 signal-review design §2.2)
+// — structurally identical to GuidanceSummary above, but its own table: the
+// Probe stays isolated from the production engine's schema. Rewritten (not
+// appended) after any run that excludes at least one signal item, so it
+// stays a bounded, general, cross-company note rather than a growing log.
+model ProbeReviewGuidance {
+  id           String     @id @default(cuid())
+  departmentId String     @unique
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  content      String     @default("")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }

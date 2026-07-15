@@ -25,7 +25,7 @@ export default async function WorkflowRunDetailPage({ params }: { params: Promis
   })
   if (!run) notFound()
 
-  const signalItems = run.signalItems.filter((item) => item.source !== 'EXTRACT_FAILED')
+  const signalItems = run.signalItems.filter((item) => item.source !== 'EXTRACT_FAILED' && item.includedInReasoning)
   const failedExtracts = run.signalItems.filter((item) => item.source === 'EXTRACT_FAILED')
 
   return (

@@ -2,6 +2,7 @@ import { prisma } from '../prisma'
 import { logger } from '../logger'
 import { callClaude, MODELS } from '../ai-client'
 import { gatherProbeSignal } from './gather'
+import { reviewSignal, distillReviewGuidance } from './review'
 import { ProbeSignalSource } from '@prisma/client'
 import {
   PROBE_HYPOTHESIZE_TOOL,
@@ -16,8 +17,9 @@ import {
   probeTestUserMessage,
 } from './prompts'
 
-// Runs Gather -> Hypothesize -> Test for ONE named company and persists every
-// step's real output, survivors and rejects alike (design doc §3, §5). Fully
+// Runs Gather -> Review -> Hypothesize -> Test for ONE named company and
+// persists every step's real output, survivors and rejects alike (design doc
+// §3, §5; Review added by the 2026-07-15 signal-review design). Fully
 // synchronous — no pg-boss/Worker involvement (design doc §2). This is the
 // only exported entry point; src/app/api/research-probe/run/route.ts calls it
 // directly and awaits the result within one request.
@@ -51,20 +53,72 @@ export async function runResearchProbe(opts: {
       return { runId: run.id }
     }
 
+    const reviewGuidance = await prisma.probeReviewGuidance.upsert({
+      where: { departmentId: opts.departmentId },
+      update: {},
+      create: { departmentId: opts.departmentId, content: '' },
+    })
+
     const { items, failures } = await gatherProbeSignal({
       companyName: opts.companyName,
       manualNotes: opts.manualNotes,
       urls: opts.urls,
     })
 
+    if (items.length === 0) {
+      await prisma.probeRun.update({
+        where: { id: run.id },
+        data: { status: 'FAILED', errorMessage: 'No signal gathered — nothing to reason about', completedAt: new Date() },
+      })
+      return { runId: run.id }
+    }
+
+    const reviewResult = await reviewSignal({
+      companyName: opts.companyName,
+      items,
+      guidance: reviewGuidance.content,
+      triggeredByUserId: opts.triggeredByUserId,
+    })
+    let costUsd = reviewResult.costUsd
+
+    const excludedItems = reviewResult.items.filter((item) => !item.includedInReasoning)
+    if (excludedItems.length > 0) {
+      const distillResult = await distillReviewGuidance({
+        currentGuidance: reviewGuidance.content,
+        excluded: excludedItems.map((item) => ({
+          source: item.group,
+          title: item.title,
+          reason: item.exclusionReason ?? '(no reason recorded)',
+        })),
+        triggeredByUserId: opts.triggeredByUserId,
+      })
+      if (distillResult) {
+        costUsd += distillResult.costUsd
+        await prisma.probeReviewGuidance.update({
+          where: { departmentId: opts.departmentId },
+          data: { content: distillResult.guidance },
+        })
+      }
+    }
+
     if (items.length + failures.length > 0) {
-      const signalData: Array<{ runId: string; source: ProbeSignalSource; title: string | null; url: string | null; content: string }> = [
-        ...items.map((item) => ({
+      const signalData: Array<{
+        runId: string
+        source: ProbeSignalSource
+        title: string | null
+        url: string | null
+        content: string
+        includedInReasoning: boolean
+        exclusionReason: string | null
+      }> = [
+        ...reviewResult.items.map((item) => ({
           runId: run.id,
           source: (item.group === 'manual' ? 'MANUAL' : item.group === 'tavily_search' ? 'TAVILY_SEARCH' : 'TAVILY_EXTRACT') as ProbeSignalSource,
           title: item.title,
           url: item.url,
           content: item.content,
+          includedInReasoning: item.includedInReasoning,
+          exclusionReason: item.exclusionReason,
         })),
         ...failures.map((failure) => ({
           runId: run.id,
@@ -72,6 +126,8 @@ export async function runResearchProbe(opts: {
           title: null,
           url: failure.url,
           content: failure.error,
+          includedInReasoning: true,
+          exclusionReason: null,
         })),
       ]
       await prisma.probeSignalItem.createMany({
@@ -79,10 +135,16 @@ export async function runResearchProbe(opts: {
       })
     }
 
-    if (items.length === 0) {
+    const signalForReasoning = reviewResult.items.filter((item) => item.includedInReasoning)
+    if (signalForReasoning.length === 0) {
       await prisma.probeRun.update({
         where: { id: run.id },
-        data: { status: 'FAILED', errorMessage: 'No signal gathered — nothing to reason about', completedAt: new Date() },
+        data: {
+          status: 'FAILED',
+          errorMessage: 'All gathered signal was excluded as noise — nothing to reason about',
+          costUsd,
+          completedAt: new Date(),
+        },
       })
       return { runId: run.id }
     }
@@ -96,7 +158,7 @@ export async function runResearchProbe(opts: {
           content: probeHypothesizeUserMessage({
             companyName: opts.companyName,
             companyProfile: companyProfile.content,
-            signal: items,
+            signal: signalForReasoning,
           }),
         },
       ],
@@ -106,19 +168,19 @@ export async function runResearchProbe(opts: {
       route: 'research-probe.hypothesize',
       userId: opts.triggeredByUserId,
     })
+    costUsd += hypothesizeResponse.costUsd
 
     const hypothesizeParsed = ProbeHypothesizeOutputSchema.safeParse(hypothesizeResponse.toolInput)
     if (!hypothesizeParsed.success) {
       log.error({ issues: hypothesizeParsed.error.issues }, 'research-probe: hypothesize output failed validation')
       await prisma.probeRun.update({
         where: { id: run.id },
-        data: { status: 'FAILED', errorMessage: 'Hypothesize output failed validation', completedAt: new Date() },
+        data: { status: 'FAILED', errorMessage: 'Hypothesize output failed validation', costUsd, completedAt: new Date() },
       })
       return { runId: run.id }
     }
 
     const hypotheses = hypothesizeParsed.data.hypotheses
-    let costUsd = hypothesizeResponse.costUsd
 
     if (hypotheses.length === 0) {
       // Not a failure — a real, informative result: nothing credible was found.
@@ -139,7 +201,7 @@ export async function runResearchProbe(opts: {
             companyName: opts.companyName,
             companyProfile: companyProfile.content,
             hypotheses,
-            signal: items,
+            signal: signalForReasoning,
           }),
         },
       ],
