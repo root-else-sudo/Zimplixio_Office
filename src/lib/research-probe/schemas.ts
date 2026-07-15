@@ -64,6 +64,8 @@ export const ProbeSignalReviewItemSchema = z.object({
     .describe('true if this item is genuinely about the named company and not a duplicate of an earlier item; false to exclude it from the reasoning stage.'),
   reason: z.string().min(1).max(300)
     .describe('One concise sentence explaining the verdict — required for both include and exclude, so every call can be audited.'),
+  cleanedContent: z.string().max(4000).optional()
+    .describe('ONLY set when include=true AND the item mixes genuinely company-specific content with clearly irrelevant blocks (e.g. a job board\'s platform-wide statistics unrelated to this one company, generic nav/footer text). Return the content with ONLY the irrelevant blocks removed — do not summarize, paraphrase, or rewrite what you keep, and do not remove anything you are not certain is irrelevant. Omit this field entirely when the item is already clean, or when include=false.'),
 })
 export type ProbeSignalReviewItem = z.infer<typeof ProbeSignalReviewItemSchema>
 

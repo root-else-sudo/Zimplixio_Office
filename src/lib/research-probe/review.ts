@@ -78,6 +78,7 @@ export async function reviewSignal(opts: {
     }
     return {
       ...item,
+      content: verdict.include && verdict.cleanedContent ? verdict.cleanedContent : item.content,
       includedInReasoning: verdict.include,
       exclusionReason: verdict.include ? null : verdict.reason,
     }

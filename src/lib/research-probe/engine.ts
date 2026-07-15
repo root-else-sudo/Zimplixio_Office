@@ -3,6 +3,7 @@ import { logger } from '../logger'
 import { callClaude, MODELS } from '../ai-client'
 import { gatherProbeSignal } from './gather'
 import { reviewSignal, distillReviewGuidance } from './review'
+import { deepenSignal } from './deepen'
 import { ProbeSignalSource } from '@prisma/client'
 import {
   PROBE_HYPOTHESIZE_TOOL,
@@ -73,9 +74,15 @@ export async function runResearchProbe(opts: {
       return { runId: run.id }
     }
 
+    // Replaces every tavily_search item's shallow search() snippet with a real
+    // extract() fetch before Review judges anything — Review then works from
+    // fuller content, and its own content edits (schemas.ts's cleanedContent)
+    // can't get clobbered by a later re-fetch.
+    const deepenedItems = await deepenSignal(items)
+
     const reviewResult = await reviewSignal({
       companyName: opts.companyName,
-      items,
+      items: deepenedItems,
       guidance: reviewGuidance.content,
       triggeredByUserId: opts.triggeredByUserId,
     })

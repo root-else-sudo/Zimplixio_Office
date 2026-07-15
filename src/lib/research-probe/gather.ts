@@ -4,7 +4,7 @@ import { logger } from '../logger'
 
 // Lazy singleton — never instantiated at module load (build time serverEnv is empty).
 let _tavily: TavilyClient | null = null
-function getTavily(): TavilyClient {
+export function getTavily(): TavilyClient {
   if (!_tavily) _tavily = tavily({ apiKey: serverEnv.TAVILY_API_KEY })
   return _tavily
 }
@@ -40,7 +40,7 @@ const PER_CALL_TIMEOUT_MS = 20_000
 // directly against the real API: passing PER_CALL_TIMEOUT_MS (20_000) to
 // extract() made every extract() call fail silently (caught below), which is
 // why manually-supplied URLs never produced any TAVILY_EXTRACT signal items.
-const EXTRACT_TIMEOUT_SECONDS = 20
+export const EXTRACT_TIMEOUT_SECONDS = 20
 
 // Steers extract() toward actual page content instead of a raw
 // front-of-page dump — verified live against hillpointe.com/careers/:
@@ -48,11 +48,12 @@ const EXTRACT_TIMEOUT_SECONDS = 20
 // text and nav links; with it, the same call opens with real page content.
 // Deliberately broad (not job-posting-specific) since owner-pasted URLs can
 // be any page type — a review site, a news article, a LinkedIn company page.
-const EXTRACT_RELEVANCE_QUERY =
+// Exported: also used by deepen.ts to re-extract search()-discovered URLs.
+export const EXTRACT_RELEVANCE_QUERY =
   'job responsibilities, open positions, employee reviews, workplace culture, hiring needs, organizational challenges, growth or expansion signals'
-const EXTRACT_CHUNKS_PER_SOURCE = 3
+export const EXTRACT_CHUNKS_PER_SOURCE = 3
 
-function normalizeUrl(url: string): string {
+export function normalizeUrl(url: string): string {
   return url.trim().replace(/\/+$/, '')
 }
 

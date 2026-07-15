@@ -81,6 +81,8 @@ Judge each item on exactly two things:
 
 You are NOT judging whether an item is useful for pitching a service to this company — that judgment belongs to a later stage. An item can be low-value marketing boilerplate and still correctly be marked include=true if it is genuinely about this company and not a duplicate; only exclude for entity mismatch, platform-wide irrelevance, or duplication.
 
+Some items are worth including but contain a MIX of genuinely company-specific content and clearly irrelevant blocks in the same page — e.g. a company's LinkedIn page whose real content (locations, specialties, employee names) sits alongside a platform-wide "open jobs by title" statistics widget that has nothing to do with this specific company. For an item like this, set include=true and also set cleanedContent to the same content with ONLY the irrelevant block(s) removed — never summarize, paraphrase, or rewrite the parts you keep, and never remove anything you are not certain is irrelevant. Leave cleanedContent unset for the common case where an included item doesn't need this.
+
 Return one verdict for every item you were given, in the same order, so your reasoning can be audited even for items you exclude. Do not silently drop any.`
 
 export const PROBE_REVIEW_DISTILL_SYSTEM = `You are the Review stage's own learning loop for Zimplixio's Research Probe. Your job is to rewrite the Review Guidance — a short, plain-English distillation of general noise patterns the Review stage has learned to watch for, across ALL companies probed so far, not just the one just run.
