@@ -23,9 +23,28 @@ import {
 // throws, or a specific URL comes back in failedResults), that item just keeps
 // its original search() snippet — some signal beats none, unlike a
 // manually-pasted URL where extract() is the only source.
-export async function deepenSignal(items: ProbeSignalItemInput[]): Promise<ProbeSignalItemInput[]> {
+//
+// Also returns which domains failed — a bot-blocked domain (Indeed, Glassdoor,
+// etc.) is a real, detectable signal the caller (engine.ts) uses to register
+// that domain for exact-match-scoped search treatment on future runs, since a
+// domain we can never extract() from is one we're permanently stuck reading via
+// search()'s broader, more easily-diluted snippet.
+export interface DeepenResult {
+  items: ProbeSignalItemInput[]
+  failedDomains: string[]
+}
+
+export function extractDomain(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return null
+  }
+}
+
+export async function deepenSignal(items: ProbeSignalItemInput[]): Promise<DeepenResult> {
   const candidates = items.filter((item) => item.group === 'tavily_search' && item.url)
-  if (candidates.length === 0) return items
+  if (candidates.length === 0) return { items, failedDomains: [] }
 
   const urls = candidates.map((item) => item.url as string)
   const client = getTavily()
@@ -42,6 +61,10 @@ export async function deepenSignal(items: ProbeSignalItemInput[]): Promise<Probe
       extractRes.results.map((result) => [normalizeUrl(result.url), result.rawContent.slice(0, EXTRACT_MAX_CONTENT_CHARS)])
     )
 
+    const failedDomains = [...new Set(
+      extractRes.failedResults.map((failed) => extractDomain(failed.url)).filter((d): d is string => d !== null)
+    )]
+
     logger.info(
       {
         requested: urls.length,
@@ -51,14 +74,16 @@ export async function deepenSignal(items: ProbeSignalItemInput[]): Promise<Probe
       'research-probe.deepen: complete'
     )
 
-    return items.map((item) => {
+    const deepened = items.map((item) => {
       if (!item.url) return item
       const deeperContent = deeperContentByUrl.get(normalizeUrl(item.url))
       if (!deeperContent) return item
       return { ...item, content: deeperContent }
     })
+
+    return { items: deepened, failedDomains }
   } catch (err) {
     logger.warn({ err }, 'research-probe.deepen: extract call failed, keeping original search snippets')
-    return items
+    return { items, failedDomains: [] }
   }
 }

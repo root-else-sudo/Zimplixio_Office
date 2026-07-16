@@ -3,8 +3,8 @@ import { logger } from '../logger'
 import { callClaude, MODELS } from '../ai-client'
 import { gatherProbeSignal } from './gather'
 import { reviewSignal, distillReviewGuidance } from './review'
-import { deepenSignal } from './deepen'
-import { ProbeSignalSource } from '@prisma/client'
+import { deepenSignal, extractDomain } from './deepen'
+import { ProbeSignalSource, ProbeDomainRuleMode } from '@prisma/client'
 import {
   PROBE_HYPOTHESIZE_TOOL,
   PROBE_TEST_TOOL,
@@ -60,10 +60,18 @@ export async function runResearchProbe(opts: {
       create: { departmentId: opts.departmentId, content: '' },
     })
 
+    const domainRules = await prisma.probeDomainRule.findMany({
+      where: { departmentId: opts.departmentId },
+    })
+    const excludeDomains = domainRules.filter((r) => r.mode === 'EXCLUDE').map((r) => r.domain)
+    const exactMatchDomains = domainRules.filter((r) => r.mode === 'EXACT_MATCH').map((r) => r.domain)
+
     const { items, failures } = await gatherProbeSignal({
       companyName: opts.companyName,
       manualNotes: opts.manualNotes,
       urls: opts.urls,
+      excludeDomains,
+      exactMatchDomains,
     })
 
     if (items.length === 0) {
@@ -78,7 +86,25 @@ export async function runResearchProbe(opts: {
     // extract() fetch before Review judges anything — Review then works from
     // fuller content, and its own content edits (schemas.ts's cleanedContent)
     // can't get clobbered by a later re-fetch.
-    const deepenedItems = await deepenSignal(items)
+    const { items: deepenedItems, failedDomains } = await deepenSignal(items)
+
+    // A domain that bot-blocked extract() just now is registered for
+    // exact-match-scoped search on future runs (any company) — skipDuplicates
+    // so a domain already known (EXCLUDE or EXACT_MATCH) is left as-is; EXCLUDE
+    // is the stronger verdict and must never be downgraded back to EXACT_MATCH.
+    if (failedDomains.length > 0) {
+      await prisma.probeDomainRule.createMany({
+        data: failedDomains.map((domain) => ({
+          departmentId: opts.departmentId,
+          domain,
+          mode: ProbeDomainRuleMode.EXACT_MATCH,
+          reason: "extract() was blocked fetching this domain — its broader search results have been observed mixing in other companies' listings.",
+          sourceCompanyName: opts.companyName,
+          sourceRunId: run.id,
+        })),
+        skipDuplicates: true,
+      })
+    }
 
     const reviewResult = await reviewSignal({
       companyName: opts.companyName,
@@ -90,6 +116,32 @@ export async function runResearchProbe(opts: {
 
     const excludedItems = reviewResult.items.filter((item) => !item.includedInReasoning)
     if (excludedItems.length > 0) {
+      // Domain-wide exclusions apply for every future run, any company —
+      // upsert so EXCLUDE always wins over (overwrites) a prior EXACT_MATCH
+      // row for the same domain.
+      const domainWideExcluded = excludedItems.filter((item) => item.domainWideIssue && item.url)
+      for (const item of domainWideExcluded) {
+        const domain = extractDomain(item.url as string)
+        if (!domain) continue
+        await prisma.probeDomainRule.upsert({
+          where: { departmentId_domain: { departmentId: opts.departmentId, domain } },
+          update: {
+            mode: ProbeDomainRuleMode.EXCLUDE,
+            reason: item.exclusionReason ?? '(no reason recorded)',
+            sourceCompanyName: opts.companyName,
+            sourceRunId: run.id,
+          },
+          create: {
+            departmentId: opts.departmentId,
+            domain,
+            mode: ProbeDomainRuleMode.EXCLUDE,
+            reason: item.exclusionReason ?? '(no reason recorded)',
+            sourceCompanyName: opts.companyName,
+            sourceRunId: run.id,
+          },
+        })
+      }
+
       const distillResult = await distillReviewGuidance({
         currentGuidance: reviewGuidance.content,
         excluded: excludedItems.map((item) => ({

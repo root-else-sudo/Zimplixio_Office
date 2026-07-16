@@ -64,8 +64,10 @@ export const ProbeSignalReviewItemSchema = z.object({
     .describe('true if this item is genuinely about the named company and not a duplicate of an earlier item; false to exclude it from the reasoning stage.'),
   reason: z.string().min(1).max(300)
     .describe('One concise sentence explaining the verdict — required for both include and exclude, so every call can be audited.'),
-  cleanedContent: z.string().max(4000).optional()
+  cleanedContent: z.string().max(6000).optional()
     .describe('ONLY set when include=true AND the item mixes genuinely company-specific content with clearly irrelevant blocks (e.g. a job board\'s platform-wide statistics unrelated to this one company, generic nav/footer text). Return the content with ONLY the irrelevant blocks removed — do not summarize, paraphrase, or rewrite what you keep, and do not remove anything you are not certain is irrelevant. Omit this field entirely when the item is already clean, or when include=false.'),
+  domainWideIssue: z.boolean().optional()
+    .describe('ONLY set true when include=false AND the reason this item is excluded is a property of the DOMAIN ITSELF, not a coincidence specific to this one company — e.g. a generic review-platform homepage with no company-specific content ever, or a job-board search-results page that structurally mixes many companies\' listings together. Do NOT set this for a same-named-but-different-entity mismatch (a neighborhood, a different business that happens to share this company\'s name) — that is specific to this company\'s name, not a fact about the domain, and would wrongly block that domain for every other company researched in the future. When in doubt, leave unset.'),
 })
 export type ProbeSignalReviewItem = z.infer<typeof ProbeSignalReviewItemSchema>
 

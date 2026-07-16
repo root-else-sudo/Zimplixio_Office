@@ -17,6 +17,7 @@ import {
 export interface ReviewedSignalItem extends ProbeSignalItemInput {
   includedInReasoning: boolean
   exclusionReason: string | null
+  domainWideIssue: boolean
 }
 
 // Judges every gathered item on two things only — genuinely about the named
@@ -46,15 +47,18 @@ export async function reviewSignal(opts: {
         }),
       },
     ],
-    // 2_000 was fine for verdicts alone but not once cleanedContent (up to
-    // 4,000 chars per item, for however many of the batch need it) entered
+    // 2_000 was fine for verdicts alone but not once cleanedContent entered
     // the schema — confirmed live: with a real 15-item batch, this call hit
     // max_tokens and silently failed schema validation 1 time in 4, which
     // fails open (includes everything, cleans nothing) with no visible error.
-    // Worst case here is roughly 15 reasons (~75 tokens each) plus a few
-    // items' cleanedContent (~1,000 tokens each) plus JSON overhead — 6_000
-    // gives real headroom over that, not just a bump that still clips later.
-    maxTokens: 6_000,
+    // Raised to 6_000, then EXTRACT_MAX_CONTENT_CHARS/cleanedContent's own cap
+    // both grew 3_000->6_000 for a separate reason (gather.ts), which raises
+    // this call's own worst case too — 15 items' reasons (~75 tokens each)
+    // plus several items' cleanedContent at up to 6,000 chars (~1,500 tokens
+    // each) plus JSON overhead can approach 6_000 again. 12_000 gives real
+    // headroom over that — verify live after any future change to either cap
+    // rather than assume the same number still has headroom.
+    maxTokens: 12_000,
     tools: [PROBE_REVIEW_TOOL],
     forceTool: PROBE_REVIEW_TOOL.name,
     route: 'research-probe.review',
@@ -68,7 +72,7 @@ export async function reviewSignal(opts: {
       'research-probe.review: output failed validation, including everything unfiltered'
     )
     return {
-      items: opts.items.map((item) => ({ ...item, includedInReasoning: true, exclusionReason: null })),
+      items: opts.items.map((item) => ({ ...item, includedInReasoning: true, exclusionReason: null, domainWideIssue: false })),
       costUsd: response.costUsd,
     }
   }
@@ -76,19 +80,23 @@ export async function reviewSignal(opts: {
   const verdictByIndex = new Map(parsed.data.reviewed.map((v) => [v.index, v]))
   const reviewed: ReviewedSignalItem[] = opts.items.map((item, index) => {
     if (item.group === 'manual' || item.group === 'tavily_extract') {
-      return { ...item, includedInReasoning: true, exclusionReason: null }
+      return { ...item, includedInReasoning: true, exclusionReason: null, domainWideIssue: false }
     }
     const verdict = verdictByIndex.get(index)
     if (!verdict) {
       // Model omitted a verdict for this item — fail open, keep it, rather
       // than silently dropping real signal because of an incomplete response.
-      return { ...item, includedInReasoning: true, exclusionReason: null }
+      return { ...item, includedInReasoning: true, exclusionReason: null, domainWideIssue: false }
     }
     return {
       ...item,
       content: verdict.include && verdict.cleanedContent ? verdict.cleanedContent : item.content,
       includedInReasoning: verdict.include,
       exclusionReason: verdict.include ? null : verdict.reason,
+      // domainWideIssue is only ever meaningful alongside include=false — the
+      // schema/prompt already tell the model not to set it otherwise, but
+      // enforce it here too rather than trust that held.
+      domainWideIssue: !verdict.include && (verdict.domainWideIssue ?? false),
     }
   })
 

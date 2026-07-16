@@ -70,6 +70,7 @@ model Department {
   findings            Finding[]
   probeRuns           ProbeRun[]
   probeReviewGuidance ProbeReviewGuidance?
+  probeDomainRules    ProbeDomainRule[]
 }
 
 // ─── Shared Department Anatomy ────────────────────────────────────────────────
@@ -280,4 +281,34 @@ model ProbeReviewGuidance {
   content      String     @default("")
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+}
+
+// Per-domain search tuning, cross-prospect (2026-07-16). Two independent
+// purposes under one small table: EXCLUDE domains Review judged as
+// generically unhelpful for company research regardless of which company
+// (a coincidental one-off entity mismatch for THIS prospect does not
+// qualify — see PROBE_REVIEW_SYSTEM's domainWideIssue distinction);
+// EXACT_MATCH domains where our own extract() fetch got bot-blocked, so a
+// tighter, domain-scoped search is worth trying instead of relying on the
+// same broad query that mixes in other companies' listings. Every row keeps
+// which prospect/run first surfaced it for audit purposes, but the rule
+// itself applies to every future run, any company.
+model ProbeDomainRule {
+  id               String              @id @default(cuid())
+  departmentId     String
+  department       Department          @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  domain           String
+  mode             ProbeDomainRuleMode
+  reason           String
+  sourceCompanyName String
+  sourceRunId      String
+  createdAt        DateTime            @default(now())
+
+  @@unique([departmentId, domain])
+  @@index([departmentId, mode])
+}
+
+enum ProbeDomainRuleMode {
+  EXCLUDE
+  EXACT_MATCH
 }

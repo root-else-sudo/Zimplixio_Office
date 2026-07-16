@@ -31,7 +31,11 @@ export interface ProbeSignalResult {
 // curated snippet (observed 2,000-2,400 chars live). Different budgets on
 // purpose, not one shared constant — same reasoning as PER_CALL_TIMEOUT_MS
 // vs EXTRACT_TIMEOUT_SECONDS below.
-export const EXTRACT_MAX_CONTENT_CHARS = 3000
+// Raised 3,000 -> 6,000 alongside EXTRACT_CHUNKS_PER_SOURCE 3 -> 5: at 5
+// chunks, real job-posting pages ran 3,200-5,400+ chars live (job-boards
+// greenhouse.io/hillpointe hit 5,371) — 3,000 would have just moved the
+// truncation point instead of fixing it.
+export const EXTRACT_MAX_CONTENT_CHARS = 6000
 export const SEARCH_MAX_CONTENT_CHARS = 3000
 const PER_CALL_TIMEOUT_MS = 20_000
 // Tavily's extract() and search() disagree on the unit of their `timeout`
@@ -51,7 +55,14 @@ export const EXTRACT_TIMEOUT_SECONDS = 20
 // Exported: also used by deepen.ts to re-extract search()-discovered URLs.
 export const EXTRACT_RELEVANCE_QUERY =
   'job responsibilities, open positions, employee reviews, workplace culture, hiring needs, organizational challenges, growth or expansion signals'
-export const EXTRACT_CHUNKS_PER_SOURCE = 3
+// Tavily's real ceiling is 5 (a value above that is a hard 400 from their
+// API, confirmed live: "chunks_per_source must be an integer between 1 and
+// 5"). Was left at 3 since fix pass #1, when it was only judged against a
+// single owner-pasted URL landing on the right chunks by chance — running it
+// against a real job posting (dayonejobs.com) showed 3 could miss the
+// specific "Essential Responsibilities"/skills section entirely depending on
+// which 3 chunks Tavily's relevance ranking picked; 5 reliably included it.
+export const EXTRACT_CHUNKS_PER_SOURCE = 5
 
 export function normalizeUrl(url: string): string {
   return url.trim().replace(/\/+$/, '')
@@ -65,10 +76,19 @@ export function normalizeUrl(url: string): string {
 // one company on purpose (design doc §4). Deduplicates by normalized URL
 // across extract + search results (extract wins — it's owner-curated), and
 // reports any URL Tavily failed to extract instead of dropping it silently.
+//
+// excludeDomains/exactMatchDomains come from engine.ts's ProbeDomainRule
+// lookup (2026-07-16) — domains Review has judged generically unhelpful
+// across prior runs (excluded outright, any company) and domains our own
+// extract() has been bot-blocked from before (searched with exactMatch on a
+// domain-scoped query instead of the same broad query, since those domains'
+// broad search results have been observed mixing in other companies' listings).
 export async function gatherProbeSignal(opts: {
   companyName: string
   manualNotes?: string
   urls?: string[]
+  excludeDomains?: string[]
+  exactMatchDomains?: string[]
 }): Promise<ProbeSignalResult> {
   const items: ProbeSignalItemInput[] = []
   const failures: ProbeSignalFailure[] = []
@@ -109,21 +129,56 @@ export async function gatherProbeSignal(opts: {
     }
   }
 
-  const queries = [`${opts.companyName} jobs`, `${opts.companyName} careers`, `${opts.companyName} reviews`]
+  const excludeDomains = opts.excludeDomains && opts.excludeDomains.length > 0 ? opts.excludeDomains : undefined
+  const generalQueries = [`${opts.companyName} jobs`, `${opts.companyName} careers`, `${opts.companyName} reviews`]
 
-  const settled = await Promise.allSettled(
-    queries.map((query) =>
-      client
-        .search(query, {
+  const searchTasks: Array<() => ReturnType<TavilyClient['search']>> = [
+    ...generalQueries.map(
+      (query) => () =>
+        client.search(query, {
           searchDepth: 'advanced',
           maxResults: 6,
           includeAnswer: false,
           includeRawContent: false,
           timeout: PER_CALL_TIMEOUT_MS,
-        })
-        .then((res) => ({ res }))
-    )
-  )
+          excludeDomains,
+        }),
+    ),
+    // Business-scale signal (funding, expansion, hiring, leadership changes)
+    // — Tavily's news mode, worded around business/hiring/growth rather than
+    // a bare company-name search so it doesn't just surface anything that
+    // happens to mention the name.
+    () =>
+      client.search(`${opts.companyName} business growth hiring expansion`, {
+        searchDepth: 'advanced',
+        maxResults: 6,
+        includeAnswer: false,
+        includeRawContent: false,
+        timeout: PER_CALL_TIMEOUT_MS,
+        topic: 'news',
+        excludeDomains,
+      }),
+    // One extra, tightly-scoped query per domain we know bot-blocks extract()
+    // — exactMatch + includeDomains, so we're not relying on the same broad
+    // query that's been observed mixing in other companies' listings on
+    // these specific domains. Tavily requires exactMatch queries to contain a
+    // quoted phrase (confirmed live: an unquoted query throws "exact_match=true
+    // requires a quoted phrase in the query") — the company name is the phrase.
+    ...(opts.exactMatchDomains ?? []).map(
+      (domain) => () =>
+        client.search(`"${opts.companyName}" jobs`, {
+          searchDepth: 'advanced',
+          maxResults: 6,
+          includeAnswer: false,
+          includeRawContent: false,
+          timeout: PER_CALL_TIMEOUT_MS,
+          includeDomains: [domain],
+          exactMatch: true,
+        }),
+    ),
+  ]
+
+  const settled = await Promise.allSettled(searchTasks.map((task) => task().then((res) => ({ res }))))
 
   for (const outcome of settled) {
     if (outcome.status === 'rejected') {
