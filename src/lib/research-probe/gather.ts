@@ -130,7 +130,7 @@ export async function gatherProbeSignal(opts: {
   }
 
   const excludeDomains = opts.excludeDomains && opts.excludeDomains.length > 0 ? opts.excludeDomains : undefined
-  const generalQueries = [`${opts.companyName} jobs`, `${opts.companyName} careers`, `${opts.companyName} reviews`]
+  const generalQueries = [`${opts.companyName} jobs`, `${opts.companyName} careers`]
 
   const searchTasks: Array<() => ReturnType<TavilyClient['search']>> = [
     ...generalQueries.map(
@@ -144,6 +144,24 @@ export async function gatherProbeSignal(opts: {
           excludeDomains,
         }),
     ),
+    // Employee-review-specific query, domain-restricted to the platforms that
+    // actually carry this content (2026-07-16 calibration finding: every
+    // sharp, specific piece of signal found in manual review — a named tool,
+    // concrete complaints, a leadership-consistency issue — came from an
+    // employee review or a news article, never a job posting or the
+    // company's own page). A bare "<company> reviews" query relies on those
+    // sites happening to rank; restricting includeDomains guarantees we
+    // actually reach them.
+    () =>
+      client.search(`${opts.companyName} employee reviews`, {
+        searchDepth: 'advanced',
+        maxResults: 6,
+        includeAnswer: false,
+        includeRawContent: false,
+        timeout: PER_CALL_TIMEOUT_MS,
+        includeDomains: ['indeed.com', 'glassdoor.com', 'simplyhired.com', 'comparably.com'],
+        excludeDomains,
+      }),
     // Business-scale signal (funding, expansion, hiring, leadership changes)
     // — Tavily's news mode, worded around business/hiring/growth rather than
     // a bare company-name search so it doesn't just surface anything that
