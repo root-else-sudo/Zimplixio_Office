@@ -212,6 +212,33 @@ This is a tool used all day, not a landing page. **Do not carry over the marketi
 - No decorative background animation anywhere in the CRM.
 - Respect `prefers-reduced-motion` (carried from the marketing guide's accessibility rule).
 - Principle: **calm and fast beats spectacle.** Motion should confirm an action, never perform.
+- **Exception — the auth screens (§6.1).** Owner decision, 2026-11-19: login and the two MFA screens use rich motion on purpose ("bring life and joy to the app"). The exception covers those three screens only; everything behind login stays calm.
+
+### 6.1 Auth Screens — "the lamp room" (added 2026-11-19)
+
+Covers `/login`, `/verify-mfa`, `/setup-mfa`. Owner-approved direction from two references (a lamp-reveal login, an animated OTP verification), rebuilt in the Zimplixio palette — inspiration, not copies.
+
+**Scene (shared by all three, mounted once in `src/app/(auth)/layout.tsx`):** a dark navy room (`navy-900`) with a floor lamp. On `/login` the room starts dark, with only the lamp's copper pull-chain bead glowing and a "Pull the chain" hint. Clicking the lamp (or pressing Enter/Space on it) turns it on; it **also turns on by itself after 2 seconds**. Lit: a flickering ignition, a warm copper cone and floor pool, a soft room halo, and 18 drifting fireflies. The MFA screens start lit. Moving between the three keeps the scene mounted, so only the card changes.
+
+**Card:** dark navy glass (`--glass-surface`, backdrop blur) with a **rim light** on the lamp-facing edge (left on desktop, top on phones). Brand row (logo + "Zimplixio Office"), title, optional subtitle, content.
+
+**Primary action is copper (`.btn-accent`), not green, on these screens only** — it reads as the lamplight. Inside the app, green stays primary. Owner to revisit after seeing it live.
+
+**6-digit code (verify + setup):** six boxes driven by one real input (paste, OS one-time-code autofill, numeric phone keypad). The active box has a copper→green light sweeping its border. On the sixth digit it submits itself, with no button:
+- **verifying:** the boxes leave their row and form a 3×2 grid joined by copper "circuit" lines (held at least ~1.1s);
+- **success:** the grid collapses into one green-bordered check, and the card floods with forest-green light;
+- **error:** the boxes return to the row, shake, flash red, then clear for another try.
+The animation always reflects the real server answer — success is never shown before the API confirms.
+
+**Layout:** lamp left, card right on desktop; below 860px the lamp sits above the card at a smaller size.
+
+**Accessibility:** the lamp is a real button; the card is `inert` until lit; labels are linked to their inputs; code status is announced through a live region; `prefers-reduced-motion` gets the lit scene immediately, with still fireflies.
+
+**Where it lives (no inline styles, no hardcoded hex):**
+- Tokens: `src/app/globals.css` `:root` (new: `copper-600/300`, `--*-rgb` triplets, `--glass-*`, `--text-on-dark`, `--error-on-dark`) and the `@theme` block that exposes them as Tailwind classes (`bg-navy-900`, `text-copper-500`, …). Brand greens are exposed as `forest-*` so Tailwind's own `green-*` is not overridden.
+- All scene/card/code-input styling and keyframes: `src/styles/auth.css`.
+- Components: `src/components/auth/` (`AuthScene`, `Lamp`, `Fireflies`, `AuthCard`, `AuthField`, `CodeInput`, `useCodeVerification`); shared logo `src/components/brand/ZimplixioMark.tsx`.
+- The only inline values are each firefly's random CSS custom properties (per-instance data).
 
 ---
 
@@ -228,5 +255,5 @@ The current Zimplixio wordmark and turbine icon establish the **palette** (fores
 - **Kept from the marketing guide:** Poppins/DM Sans type, base-4 spacing, radii, semantic colors.
 - **Sidebar is the org chart:** six departments, built (Product/Research) vs. reserved seats that are **visible and clickable** into a Reserved State.
 - **Findings states** map to pills: candidate (copper), validated (green), rejected (muted).
-- **Restraint on motion:** functional only; no marketing-site animation.
+- **Restraint on motion:** functional only; no marketing-site animation. **Sole exception: the auth screens (§6.1).**
 - **Logo vector cleanup** is deferred and off the critical path.

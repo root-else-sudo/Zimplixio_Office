@@ -1,84 +1,51 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { ShieldCheck } from 'lucide-react'
+import { AuthCard, AuthAlert } from '@/components/auth/AuthCard'
+import { CodeInput } from '@/components/auth/CodeInput'
+import { useCodeVerification, toVerifyResult } from '@/components/auth/useCodeVerification'
+
+async function verifyCode(code: string) {
+  const res = await fetch('/api/mfa/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  })
+  return toVerifyResult(res)
+}
 
 export default function VerifyMfaPage() {
-  const router = useRouter()
   const { update } = useSession()
-  const [code, setCode] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
+  // Re-issue the JWT cookie. The server only sets mfaVerified when this
+  // proof checks out (src/lib/auth.ts) — the browser can't just claim it.
+  const onVerified = useCallback((proof: string) => update({ mfaProof: proof }), [update])
 
-    const res = await fetch('/api/mfa/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    })
+  const { code, status, error, inputRef, onChange, submit } = useCodeVerification({
+    verify: verifyCode,
+    onVerified,
+  })
 
-    if (!res.ok) {
-      const data = await res.json()
-      setError(data.error ?? 'Invalid code. Try again.')
-      setLoading(false)
-      return
-    }
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [inputRef])
 
-    // Re-issue the JWT cookie with mfaVerified=true, then hard-navigate so
-    // the middleware always reads the fresh cookie. Client-side router.push
-    // can race against the cookie write in production behind a proxy.
-    await update({ mfaVerified: true })
-    window.location.replace('/')
-  }
+  const verified = status === 'success'
 
   return (
-    <div className="min-h-screen bg-[#0f2044] flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="bg-white rounded-2xl p-8 shadow-2xl">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-[var(--green-50)] rounded-xl flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5 text-[var(--green-600)]" />
-            </div>
-            <div>
-              <h1 className="font-[family-name:var(--font-poppins)] font-bold text-lg text-gray-900">
-                Two-factor auth
-              </h1>
-              <p className="text-xs text-gray-500">Enter the code from Microsoft Authenticator</p>
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-              placeholder="000000"
-              className="w-full text-center text-2xl tracking-[0.5em] px-3.5 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[var(--green-600)]"
-              required
-            />
-
-            {error && (
-              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading || code.length < 6}
-              className="btn-primary w-full justify-center"
-            >
-              {loading ? 'Verifying…' : 'Verify'}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
+    <AuthCard
+      title={verified ? 'You’re verified' : 'Enter your 6-digit code'}
+      subtitle={
+        verified
+          ? 'Opening your office…'
+          : 'Open your authenticator app and type the code shown for Zimplixio. It checks itself once all six digits are in.'
+      }
+      tone={verified ? 'success' : undefined}
+    >
+      <CodeInput ref={inputRef} value={code} status={status} onChange={onChange} onComplete={submit} />
+      {error && <AuthAlert>{error}</AuthAlert>}
+      {!verified && <p className="auth-hint">Codes refresh every 30 seconds.</p>}
+    </AuthCard>
   )
 }

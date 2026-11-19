@@ -20,7 +20,8 @@ export default function SettingsClient({ initialMfaEnabled }: { initialMfaEnable
         const data = await res.json()
         throw new Error(data.error ?? 'Failed to disable two-factor authentication')
       }
-      await update({ mfaEnabled: false, mfaVerified: false })
+      // Server re-reads mfaEnabled (now false) from the DB on update.
+      await update({ mfaVerified: false })
       setMfaEnabled(false)
       setConfirming(false)
     } catch (e) {

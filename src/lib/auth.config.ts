@@ -7,25 +7,21 @@ export const authConfig: NextAuthConfig = {
   },
   session: { strategy: 'jwt' },
   callbacks: {
-    jwt({ token, user, trigger, session }) {
+    // Edge-safe base callback (this config is also used by src/proxy.ts).
+    // It deliberately does NOT handle `trigger === 'update'`: session updates
+    // come from the browser and must be checked against the database and a
+    // server-signed MFA proof, which happens in src/lib/auth.ts.
+    jwt({ token, user }) {
       if (user) {
         token.id = user.id as string
-        token.role = (user as any).role
-        token.mfaEnabled = (user as any).mfaEnabled
-        token.mfaSecret = (user as any).mfaSecret
+        token.role = user.role
+        token.mfaEnabled = user.mfaEnabled
+        token.mfaSecret = user.mfaSecret
         token.mfaVerified = false
       }
-      // Allow client-side useSession().update({ mfaVerified, mfaEnabled }) to
-      // re-issue the JWT with refreshed flags. Without this, /api/mfa/verify
-      // succeeds but the cookie keeps mfaVerified=false → middleware loop.
-      if (trigger === 'update' && session && typeof session === 'object') {
-        if ('mfaVerified' in session && typeof session.mfaVerified === 'boolean') {
-          token.mfaVerified = session.mfaVerified
-        }
-        if ('mfaEnabled' in session && typeof session.mfaEnabled === 'boolean') {
-          token.mfaEnabled = session.mfaEnabled
-        }
-      }
+      // Per-login session id — MFA proofs are bound to it. Also backfills
+      // tokens issued before this field existed.
+      if (!token.sid) token.sid = crypto.randomUUID()
       return token
     },
     session({ session, token }) {
@@ -33,6 +29,7 @@ export const authConfig: NextAuthConfig = {
       session.user.role = token.role as string
       session.user.mfaEnabled = token.mfaEnabled as boolean
       session.user.mfaVerified = token.mfaVerified as boolean
+      session.user.sid = token.sid as string
       return session
     },
   },

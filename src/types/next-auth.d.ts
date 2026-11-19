@@ -7,6 +7,8 @@ declare module 'next-auth' {
       role: string
       mfaEnabled: boolean
       mfaVerified: boolean
+      /** Per-login session id; MFA proofs are bound to it (src/lib/mfa-proof.ts). */
+      sid: string
     } & DefaultSession['user']
   }
 
@@ -25,5 +27,6 @@ declare module 'next-auth/jwt' {
     mfaEnabled: boolean
     mfaVerified: boolean
     mfaSecret: string | null
+    sid: string
   }
 }

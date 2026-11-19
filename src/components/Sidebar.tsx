@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { departmentSlug } from '@/lib/departments'
+import { ZimplixioMark } from '@/components/brand/ZimplixioMark'
 import type { DepartmentKey, DepartmentStatus } from '@prisma/client'
 
 export type SidebarDepartment = {
@@ -23,17 +24,6 @@ const DEPARTMENT_ICONS: Record<DepartmentKey, LucideIcon> = {
   SALES: TrendingUp,
   FINANCE: DollarSign,
   OPERATIONS: Settings2,
-}
-
-function ZimplixioMark({ size = 28 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 400 400" overflow="visible" aria-hidden="true">
-      <circle cx="200" cy="200" r="160" stroke="#C68A4E" strokeWidth="16" fill="none" />
-      <path d="M 313,220 A 115,115 0 1,1 288,126 L 362,126 L 362,176 L 250,176 A 65,65 0 1,0 264,211 Z" fill="#2E7D32" />
-      <polyline points="183,183 168,200 183,217" stroke="#C68A4E" strokeWidth="9" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <polyline points="217,183 232,200 217,217" stroke="#C68A4E" strokeWidth="9" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
 }
 
 function initials(name: string) {

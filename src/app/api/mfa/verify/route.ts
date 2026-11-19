@@ -7,6 +7,7 @@ import { withAuth } from '@/lib/rbac'
 import { parseJson, z } from '@/lib/validate'
 import { apiError, toApiError } from '@/lib/errors'
 import { rateLimit } from '@/lib/ratelimit'
+import { createMfaProof } from '@/lib/mfa-proof'
 
 const VerifySchema = z.object({
   code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
@@ -47,7 +48,9 @@ export const POST = withAuth(async (req: NextRequest, _ctx, session) => {
     const ok = await verifyTotpCode(session.user.id, user.mfaSecret, code)
     if (!ok) return apiError('VALIDATION_ERROR', 'Invalid code')
 
-    return NextResponse.json({ ok: true })
+    // The client passes this proof to useSession().update({ mfaProof }); it's
+    // the only way the session can become mfaVerified (see src/lib/mfa-proof.ts).
+    return NextResponse.json({ ok: true, proof: createMfaProof(session.user.id, session.user.sid) })
   } catch (err) {
     return toApiError(err, 'mfa.verify')
   }

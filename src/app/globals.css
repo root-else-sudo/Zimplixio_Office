@@ -1,14 +1,35 @@
 @import "tailwindcss";
+@import "../styles/auth.css";
 
+/*
+ * ── Design tokens ────────────────────────────────────────────────────────
+ * Single source of truth for every color/shadow/timing in the app
+ * (spec: docs/superpowers/specs/2026-07-03-crm-v2-design-system.md).
+ * Raw values live in :root; the @theme block below registers them with
+ * Tailwind so components use classes (`bg-navy-900`, `text-copper-500`)
+ * instead of inline `style={{}}` or hardcoded hex.
+ *
+ * Brand greens are exposed as `forest-*`, NOT `green-*`, on purpose:
+ * overriding Tailwind's own `green-*` scale would silently recolor every
+ * existing `text-green-600` in the app.
+ */
 :root {
   /* Forest green — primary/interactive (from the Zimplixio logo) */
   --green-600: #2E7D32;
   --green-700: #276A2B;
   --green-50:  #EAF3EA;
 
-  /* Copper — secondary accent */
+  /* Copper — secondary accent (also the auth screens' lamplight + primary action) */
+  --copper-600: #A86F37;
   --copper-500: #C68A4E;
+  --copper-300: #E2B47E;
   --copper-100: #F3E7D8;
+
+  /* RGB triplets — for alpha compositions: rgb(var(--copper-rgb) / 0.3) */
+  --copper-rgb: 198 138 78;
+  --lamplight-rgb: 236 184 122;
+  --forest-rgb: 46 125 50;
+  --error-rgb: 239 68 68;
 
   /* Charcoal — logo ink, strongest text on light */
   --charcoal-800: #1F2A33;
@@ -38,9 +59,49 @@
   /* Dark card — chart panels */
   --dark-card: #1a1f36;
 
+  /* Auth screens — dark glass surfaces over the navy room */
+  --glass-surface: rgb(15 32 68 / 0.58);
+  --glass-border:  rgb(159 176 195 / 0.14);
+  --glass-field:   rgb(6 12 24 / 0.55);
+  --text-on-dark:  #F1F4F8;
+  --error-on-dark: #FCA5A5;  /* error text legible on navy; --error is too dark there */
+
   /* Typography */
   --font-heading: var(--font-poppins), 'Poppins', ui-sans-serif, system-ui, sans-serif;
   --font-body:    var(--font-dm-sans), 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-forest-50:  var(--green-50);
+  --color-forest-600: var(--green-600);
+  --color-forest-700: var(--green-700);
+
+  --color-copper-100: var(--copper-100);
+  --color-copper-300: var(--copper-300);
+  --color-copper-500: var(--copper-500);
+  --color-copper-600: var(--copper-600);
+
+  --color-charcoal-800: var(--charcoal-800);
+
+  --color-navy-900: var(--navy-900);
+  --color-navy-800: var(--navy-800);
+  --color-navy-700: var(--navy-700);
+  --color-navy-600: var(--navy-600);
+  --color-navy-muted: var(--navy-text-muted);
+
+  --color-canvas:  var(--canvas);
+  --color-surface: var(--surface);
+  --color-line:    var(--border);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error:   var(--error);
+
+  --color-on-dark: var(--text-on-dark);
+  --color-glass:   var(--glass-surface);
+
+  --font-heading: var(--font-heading);
+  --font-body:    var(--font-body);
 }
 
 html { scroll-behavior: smooth; }
@@ -89,6 +150,10 @@ textarea:focus {
     0 2px 8px rgba(0,0,0,0.06);
 }
 
+/* ── Brand mark — colors come from tokens, not hardcoded in the SVG ── */
+.brand-mark-ring  { stroke: var(--copper-500); }
+.brand-mark-glyph { fill: var(--green-600); }
+
 /* ── Dark card — for charts and KPIs ── */
 .dark-card {
   background: var(--dark-card);
@@ -131,6 +196,40 @@ textarea:focus {
 .btn-primary:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* ── Accent button — copper. Primary action on the dark auth screens,
+      where it reads as the lamplight; green stays primary inside the app. ── */
+.btn-accent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(180deg, var(--copper-300) 0%, var(--copper-500) 100%);
+  color: var(--navy-900);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 15px;
+  padding: 12px 20px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 8px 24px -8px rgb(var(--copper-rgb) / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.35);
+  transition: filter 0.15s, transform 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+.btn-accent:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px -8px rgb(var(--copper-rgb) / 0.7), inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+.btn-accent:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn-accent:focus-visible {
+  outline: 2px solid var(--copper-300);
+  outline-offset: 3px;
 }
 
 /* ── Destructive button — reserved for reject/delete confirmations ── */

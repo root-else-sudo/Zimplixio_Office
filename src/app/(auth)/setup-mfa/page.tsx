@@ -1,126 +1,107 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { ShieldCheck, Loader2, CheckCircle } from 'lucide-react'
+import QRCode from 'qrcode'
+import { AuthCard, AuthAlert } from '@/components/auth/AuthCard'
+import { CodeInput } from '@/components/auth/CodeInput'
+import { useCodeVerification, toVerifyResult } from '@/components/auth/useCodeVerification'
 
 export default function SetupMfaPage() {
-  const router = useRouter()
   const { update } = useSession()
-  const [step, setStep] = useState<'idle' | 'qr' | 'verify' | 'done'>('idle')
-  const [qrUrl, setQrUrl] = useState('')
+  const [step, setStep] = useState<'start' | 'scan'>('start')
+  const [qrDataUrl, setQrDataUrl] = useState('')
   const [factorSid, setFactorSid] = useState('')
-  const [code, setCode] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [startError, setStartError] = useState('')
+  const [starting, setStarting] = useState(false)
 
   async function createFactor() {
-    setLoading(true)
-    setError('')
-    const res = await fetch('/api/mfa/setup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create' }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      setError(data.error ?? 'Failed to create MFA factor')
-    } else {
-      // bindingUri is an otpauth:// URI — convert to QR image via qrserver.com
-      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(data.bindingUri)}&size=200x200&margin=10`
-      setQrUrl(qrImageUrl)
+    setStarting(true)
+    setStartError('')
+    try {
+      const res = await fetch('/api/mfa/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setStartError(data.error ?? 'Couldn’t start setup. Try again.')
+        return
+      }
+      // bindingUri is an otpauth:// URI containing the TOTP secret. Render it
+      // locally — never send it to a third-party QR service.
+      setQrDataUrl(await QRCode.toDataURL(data.bindingUri, { margin: 0, width: 344 }))
       setFactorSid(data.factorSid)
-      setStep('qr')
+      setStep('scan')
+    } catch {
+      setStartError('Couldn’t reach the server. Check your connection and try again.')
+    } finally {
+      setStarting(false)
     }
-    setLoading(false)
   }
 
-  async function verifyFactor() {
-    setLoading(true)
-    setError('')
-    const res = await fetch('/api/mfa/setup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'verify', factorSid, code }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      setError(data.error ?? 'Invalid code, try again')
-    } else {
-      // The DB now has mfaEnabled=true; refresh the JWT so the cookie agrees.
-      // Mark the session as verified too — they literally just proved the factor.
-      await update({ mfaEnabled: true, mfaVerified: true })
-      setStep('done')
-      setTimeout(() => router.push('/'), 2000)
-    }
-    setLoading(false)
+  const verify = useCallback(
+    async (code: string) => {
+      const res = await fetch('/api/mfa/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify', factorSid, code }),
+      })
+      return toVerifyResult(res)
+    },
+    [factorSid],
+  )
+
+  // Refresh the JWT: the server re-reads mfaEnabled from the DB and marks the
+  // session verified only with this proof (src/lib/auth.ts).
+  const onVerified = useCallback((proof: string) => update({ mfaProof: proof }), [update])
+
+  const { code, status, error, inputRef, onChange, submit } = useCodeVerification({ verify, onVerified })
+
+  // Cursor goes straight into the code boxes once the QR code is up.
+  useEffect(() => {
+    if (step === 'scan') inputRef.current?.focus()
+  }, [step, inputRef])
+
+  const verified = status === 'success'
+
+  if (step === 'start') {
+    return (
+      <AuthCard
+        title="Turn on two-step sign-in"
+        subtitle="Each time you sign in, you’ll also enter a code from an authenticator app on your phone, such as Microsoft Authenticator."
+      >
+        {startError && <AuthAlert>{startError}</AuthAlert>}
+        <div className="auth-actions">
+          <button type="button" onClick={createFactor} disabled={starting} className="btn-accent">
+            {starting ? 'Preparing your QR code…' : 'Show my QR code'}
+          </button>
+        </div>
+      </AuthCard>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-[#0f2044] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-8">
-        <div className="flex flex-col items-center mb-6">
-          <div className="w-12 h-12 bg-[var(--green-50)] rounded-xl flex items-center justify-center mb-4">
-            <ShieldCheck className="w-6 h-6 text-[var(--green-600)]" />
-          </div>
-          <h1 className="font-[family-name:var(--font-poppins)] font-bold text-xl text-gray-900">
-            Set up Authenticator
-          </h1>
-          <p className="text-sm text-gray-500 text-center mt-1">
-            Secure your account with Microsoft Authenticator
-          </p>
-        </div>
-
-        {step === 'idle' && (
-          <button
-            onClick={createFactor}
-            disabled={loading}
-            className="btn-primary w-full justify-center"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            Get started
-          </button>
-        )}
-
-        {step === 'qr' && (
-          <div className="flex flex-col items-center gap-4">
-            <p className="text-sm text-gray-600 text-center">
-              Scan this QR code with Microsoft Authenticator, then enter the 6-digit code below.
-            </p>
-            {qrUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={qrUrl} alt="MFA QR code" className="w-48 h-48 rounded-lg border border-gray-200" />
-            )}
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-              placeholder="000000"
-              className="w-full text-center text-2xl tracking-[0.5em] font-mono border border-gray-300 rounded-xl py-3 focus:outline-none focus:ring-2 focus:ring-[var(--green-600)]"
-            />
-            {error && <p className="text-xs text-red-500">{error}</p>}
-            <button
-              onClick={verifyFactor}
-              disabled={loading || code.length !== 6}
-              className="btn-primary w-full justify-center"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              Verify
-            </button>
-          </div>
-        )}
-
-        {step === 'done' && (
-          <div className="flex flex-col items-center gap-3">
-            <CheckCircle className="w-12 h-12 text-green-500" />
-            <p className="text-sm font-semibold text-gray-900">MFA enabled!</p>
-            <p className="text-xs text-gray-500">Redirecting to dashboard…</p>
-          </div>
+    <AuthCard
+      title={verified ? 'Two-step sign-in is on' : 'Scan, then enter the code'}
+      subtitle={
+        verified
+          ? 'Opening your office…'
+          : 'In your authenticator app, add an account and scan this code. Then type the 6-digit code it shows.'
+      }
+      tone={verified ? 'success' : undefined}
+    >
+      <div className="auth-qr">
+        {qrDataUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- local data: URL, nothing to optimize
+          <img src={qrDataUrl} alt="QR code for adding Zimplixio Office to your authenticator app" />
+        ) : (
+          <div className="auth-qr-skeleton" />
         )}
       </div>
-    </div>
+      <CodeInput ref={inputRef} value={code} status={status} onChange={onChange} onComplete={submit} />
+      {error && <AuthAlert>{error}</AuthAlert>}
+    </AuthCard>
   )
 }

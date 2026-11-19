@@ -6,6 +6,7 @@ import { createTotpFactor, verifyTotpSetup } from '@/lib/twilio'
 import { withAuth } from '@/lib/rbac'
 import { parseJson, z } from '@/lib/validate'
 import { apiError, toApiError } from '@/lib/errors'
+import { createMfaProof } from '@/lib/mfa-proof'
 
 const SetupSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create') }),
@@ -20,6 +21,14 @@ export const POST = withAuth(async (req: NextRequest, _ctx, session) => {
   const userId = session.user.id
 
   try {
+    // This route skips the normal MFA gate so first-time enrollment works.
+    // But if MFA is already on, only an MFA-verified session may re-enroll —
+    // otherwise a password alone could swap in a new authenticator and get in.
+    const current = await prisma.user.findUnique({ where: { id: userId }, select: { mfaEnabled: true } })
+    if (current?.mfaEnabled && !session.user.mfaVerified) {
+      return apiError('FORBIDDEN', 'MFA verification required')
+    }
+
     if (body.action === 'create') {
       const factor = await createTotpFactor(
         userId,
@@ -45,7 +54,8 @@ export const POST = withAuth(async (req: NextRequest, _ctx, session) => {
       where: { id: userId },
       data: { mfaEnabled: true },
     })
-    return NextResponse.json({ ok: true })
+    // They just proved the new factor — this proof marks the session verified.
+    return NextResponse.json({ ok: true, proof: createMfaProof(userId, session.user.sid) })
   } catch (err) {
     return toApiError(err, 'mfa.setup')
   }
