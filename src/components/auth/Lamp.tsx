@@ -24,7 +24,7 @@ export function Lamp({ lit, onPull }: { lit: boolean; onPull: () => void }) {
       onAnimationEnd={(e) => {
         if (e.animationName === 'chain-tug') setTugging(false)
       }}
-      aria-label={lit ? 'Lamp is on' : 'Turn on the lamp'}
+      aria-label={lit ? 'Turn off the lamp' : 'Turn on the lamp'}
       aria-pressed={lit}
       data-tug={tugging || undefined}
     >

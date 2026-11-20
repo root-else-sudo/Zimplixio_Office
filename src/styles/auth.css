@@ -153,6 +153,16 @@
   opacity: 1;
 }
 
+/* Switched off by the chain: the light dies quickly instead of snapping out.
+   Keyed on data-switch='off' (not just data-lit='false') so the initial dark
+   room on page load never plays it. */
+.auth-scene[data-switch='off'] .lamp-cone,
+.auth-scene[data-switch='off'] .lamp-pool {
+  animation: lamp-dim 0.45s ease-out forwards;
+}
+.auth-scene[data-switch='off'] .auth-halo { transition-duration: 0.5s; }
+.auth-scene[data-switch='off'] .auth-fireflies { transition: opacity 0.6s ease; }
+
 .auth-lamp-hint {
   position: absolute;
   left: calc(74% + 16px);
@@ -689,6 +699,13 @@
   30%  { opacity: 0.35; }
   40%  { opacity: 1; }
   100% { opacity: 1; }
+}
+
+@keyframes lamp-dim {
+  0%   { opacity: 1; }
+  20%  { opacity: 0.55; }
+  30%  { opacity: 0.75; }
+  100% { opacity: 0; }
 }
 
 @keyframes lamp-breathe {
