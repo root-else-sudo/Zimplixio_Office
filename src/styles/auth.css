@@ -369,16 +369,101 @@
 .auth-actions { margin-top: 24px; }
 .auth-actions .btn-accent { width: 100%; }
 
-.auth-alert {
+/* Inline messages — one base, tone set by data-tone (error | info). */
+.auth-message {
   margin-top: 16px;
   padding: 10px 14px;
   font-size: 13.5px;
   line-height: 1.45;
+  border-radius: 10px;
+  border: 1px solid;
+  animation: alert-in 0.3s ease both;
+}
+.auth-message[data-tone='error'] {
   color: var(--error-on-dark);
   background: rgb(var(--error-rgb) / 0.1);
-  border: 1px solid rgb(var(--error-rgb) / 0.32);
-  border-radius: 10px;
-  animation: alert-in 0.3s ease both;
+  border-color: rgb(var(--error-rgb) / 0.32);
+}
+.auth-message[data-tone='info'] {
+  color: var(--copper-100);
+  background: rgb(var(--copper-rgb) / 0.1);
+  border-color: rgb(var(--copper-rgb) / 0.3);
+}
+/* An info notice above the form sits under the title, not above a field. */
+.auth-body > .auth-message:first-child { margin: 0 0 20px; }
+
+/* ───── Password helpers ───── */
+
+.auth-input-wrap[data-revealable] .auth-input { padding-right: 46px; }
+
+.auth-input-reveal {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--navy-text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.auth-input-reveal svg { width: 17px; height: 17px; }
+.auth-input-reveal:hover { color: var(--text-on-dark); background: rgb(159 176 195 / 0.1); }
+.auth-input-reveal:focus-visible {
+  outline: 2px solid var(--copper-300);
+  outline-offset: 0;
+}
+
+.auth-field-note {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--copper-300);
+  animation: alert-in 0.2s ease both;
+}
+
+/* ───── Card footer & page legal line ───── */
+
+.auth-card-footer {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--glass-border);
+  display: grid;
+  gap: 8px;
+}
+.auth-footer-line {
+  display: flex;
+  align-items: flex-start; /* icon lines up with the first line when text wraps */
+  gap: 8px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--navy-text-muted);
+}
+.auth-footer-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: var(--copper-300);
+}
+
+.auth-legal {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 18px;
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  color: rgb(159 176 195 / 0.6);
+  pointer-events: none;
 }
 
 .auth-hint {
@@ -663,7 +748,7 @@
     margin: 12px 0 -36px;
   }
   .auth-halo { width: 640px; height: 640px; }
-  .auth-card-area { padding: 0 0 32px; }
+  .auth-card-area { padding: 0 0 56px; } /* room for the legal line */
   .auth-card { padding: 28px 22px 24px; border-radius: 22px; }
   /* Lamp is above now — light falls on the top edge. */
   .auth-card::before {

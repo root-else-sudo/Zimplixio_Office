@@ -230,6 +230,20 @@ Covers `/login`, `/verify-mfa`, `/setup-mfa`. Owner-approved direction from two 
 - **error:** the boxes return to the row, shake, flash red, then clear for another try.
 The animation always reflects the real server answer — success is never shown before the API confirms.
 
+**Product-grade sign-in details (added 2026-11-20):**
+- **Password field:** show/hide eye and a "Caps Lock is on" note (`AuthField` props `revealable`, `capsLockWarning`).
+- **Return to where you were going:** a signed-out visit to any page carries `?callbackUrl=` through login and MFA, then lands there. It's validated against open redirects in `src/lib/auth-redirect.ts`.
+- **"Your session ended" notice:** an `info`-tone `AuthMessage`, shown when a session ended on its own. It relies on a non-sensitive "was signed in" marker cookie, cleared only by a deliberate sign-out (`src/lib/sign-out.ts`).
+- **Card footer (`AuthCard footer` + `AuthFooterLine`):**
+  - login: "Need access? Ask your Zimplixio admin to invite you." plus "Protected with two-step verification."
+  - verify: "Signed in as … Not you? Sign out"
+  - setup: "Back to settings"
+- **Page legal line:** "© {year} Zimplixio". Privacy/Terms links get added once those pages exist.
+- **Tab titles:** the root layout's `title.template` (`%s · Zimplixio Office`), with each page setting only its own name. Dashboard pages can adopt it the same way.
+- **Audience-neutral copy for employees and customers:** "Sign in to Zimplixio", placeholder `you@company.com`, "Opening Zimplixio…".
+- **Messages:** one `.auth-message` style with `data-tone="error" | "info"`.
+- **Page structure:** the auth pages follow the project's server `page.tsx` → `*Client.tsx` pattern.
+
 **Layout:** lamp left, card right on desktop; below 860px the lamp sits above the card at a smaller size.
 
 **Accessibility:** the lamp is a real button; the card is `inert` until lit; labels are linked to their inputs; code status is announced through a live region; `prefers-reduced-motion` gets the lit scene immediately, with still fireflies.

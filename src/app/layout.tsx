@@ -16,7 +16,9 @@ const dmSans = DM_Sans({
 })
 
 export const metadata: Metadata = {
-  title: 'Zimplixio Office',
+  // Pages set only their own name (`export const metadata = { title: 'Sign in' }`);
+  // the template adds the product name, so every tab reads "Sign in · Zimplixio Office".
+  title: { default: 'Zimplixio Office', template: '%s · Zimplixio Office' },
   description: 'Business operations dashboard',
 }
 

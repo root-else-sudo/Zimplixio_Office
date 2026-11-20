@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
+import { signOutDeliberately } from '@/lib/sign-out'
 import {
   LogOut, FlaskConical, Wrench, Megaphone, TrendingUp, DollarSign, Settings2, Settings,
   type LucideIcon,
@@ -120,7 +121,7 @@ export default function Sidebar({ departments }: { departments: SidebarDepartmen
         </Link>
 
         <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          onClick={() => signOutDeliberately()}
           className="flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-sm font-medium transition-colors"
           style={{ color: 'rgba(255,255,255,0.4)' }}
           onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.8)')}

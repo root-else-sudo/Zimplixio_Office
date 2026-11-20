@@ -82,6 +82,7 @@ export function AuthScene({ children }: { children: React.ReactNode }) {
             {children}
           </main>
         </div>
+        <p className="auth-legal">© {new Date().getFullYear()} Zimplixio</p>
       </div>
     </AuthSceneContext.Provider>
   )
