@@ -1,66 +1,107 @@
 # Zimplixio Office — Operating Instructions
 
+> ⚠️ **This repository is PUBLIC** (github.com/root-else-sudo/Zimplixio_Office). Everything committed is readable by anyone. Never commit client or prospect names, personal details about the owner, real credentials or defaults, or screenshots of real data. Keep that kind of material in the database, or in documents outside the repo.
+
 ## What This Is
-The single consolidated platform for Zimplixio's operations — a Next.js CRM organized as a **company made of departments** (Product/Research, Engineering, Marketing, Sales, Finance, Operations), heading toward an autonomous, agent-run company the owner supervises. See the CRM v2 section below for current status; V1's feature list (Posts/LinkedIn, Projects/Gantt, Opportunities) has been fully retired and rebuilt fresh under this department structure, one department at a time.
+The single platform for Zimplixio's operations: a Next.js CRM organized as a **company made of departments** (Product/Research, Engineering, Marketing, Sales, Finance, Operations). It's heading toward an autonomous, agent-run company that the owner supervises, and later a portal for Zimplixio's clients too.
 
-A companion Python repo (`Zimplixio_Marketing`) existed pre-V2 and has been archived on GitHub (2026-06-30) — nothing from it was migrated; this repo is the sole platform going forward.
+V1 (Posts/LinkedIn, Projects/Gantt, Opportunities, a separate Python repo) was retired on 2026-07-06 and rebuilt from scratch as V2. Nothing was migrated. The README has the full public overview; `docs/GOTCHAS.md` has every past pitfall in detail.
 
-## CRM v2 — Department-Organized Rebuild (as of 2026-07-13)
+## Status (as of 2026-11-20)
 
-**Status: the full original build order (planning §7) is complete and live.** Product/Research is now the fully-built reference department — the pattern every future department follows. The CRM is reframed from a *feature-organized* app into a **company organized by departments**, heading toward an autonomous, agent-run company the owner supervises.
+**Done:**
+- **Original V2 build order (planning §7), all 5 increments:** generic Department + shared anatomy; Product/Research artifacts (Company Profile, Findings); Research Engine; Review UI; learning loop (Guidance Summary).
+- **Hardening audit (July):** done, with 10 items deliberately deferred (see the README's "Known Gaps").
+- **Research Probe POC (Workflow tab):** built. Code work has been paused since 2026-07-20.
+- **Sign-in screens redesigned (2026-11-19/20):** the "lamp room" scene, animated 6-digit code, return-to-page, session-ended notice, show password and Caps Lock warning.
+- **MFA bypasses closed (2026-11-19).** See Security below.
+- **Dependencies (2026-11-18):** 32 npm advisories fixed and all stale Dependabot branches deleted. One advisory (`effect`, Prisma CLI only) is knowingly accepted (GOTCHAS #5).
 
-**This is a clean rebuild (V2), not a migration.** On 2026-07-06, all V1 tables were dropped from both the local dev DB and the Railway `development` Postgres, and all V1 feature code (Posts, Projects, Opportunities, Notifications/Web Push, the legacy pipeline/opportunities/linkedin/cron worker job handlers) was deleted outright. Nothing was migrated forward — every schema decision is re-derived from the v2 planning doc. Stack tooling (Next.js, Prisma, pg-boss, NextAuth, Tailwind) is kept as-is.
+**Next:** an **access-management module**: users, roles, client companies and invitations. Not started. It will likely bring email sending (for invites and password reset) and MFA recovery codes.
 
-**Charter (original scope, still accurate for the six-department roster):** `docs/superpowers/specs/2026-07-02-crm-department-redesign-charter.md`.
+**Not built yet:** Engineering, Marketing, Sales, Finance and Operations are reserved seats (Department row + empty Goal/Task/Knowledge/Kpi tables). Building one repeats the Product/Research pattern below.
 
-**V2 planning docs (authoritative, supersede the charter's architecture guess) — NOT committed to this repo, owner's machine only:**
-`~/Documents/Zimplixio Documents/CRM Version 2/` — four docs: Planning (function/architecture/build order — the master doc), Design System (navy/forest-green/copper tokens), Environments & Git Workflow, Security. Read the Planning doc before starting a new department. Consider copying these into `docs/` at some point so they're version-controlled and durable across machines.
+## Authoritative docs (all in the repo)
+- **V2 specs:** `docs/superpowers/specs/`. The Planning doc (`2026-07-03-crm-v2-planning.md`) is the master; read it before starting a new department. Also the Design System (`2026-07-03-crm-v2-design-system.md`, which includes §6.1 Auth Screens), Environments & Git Workflow, and Security. Each has an "Implementation Status" block.
+- **Charter (original six-department scope):** `docs/superpowers/specs/2026-07-02-crm-department-redesign-charter.md`.
+- **Plans for past work:** `docs/superpowers/plans/`.
+- **Ops references:** `docs/ENV.md`, `docs/RAILWAY.md`, `docs/SECURITY.md`, `docs/GOTCHAS.md`.
 
-**Architecture (locked, planning doc §4.3 "Option A"):** one generic `Department` entity (`id, key, name, status, order`) + shared-anatomy tables `Goal` / `Task` / `Knowledge` / `Kpi`, each referencing a department. Department-specific artifacts (Company Profile, Findings, GuidanceSummary) get their own tables keyed to the owning department. Adding department #N = one new row + optional new extension tables — existing departments are never touched. This superseded the charter's tentative "Approach B" (per-department service-layer modules under `src/modules/<department>/`) once the owner returned with the full planning doc.
+## Architecture (locked, planning §4.3 "Option A")
+- **Generic structure:** one generic `Department` entity (`id, key, name, status, order`), plus shared-anatomy tables `Goal` / `Task` / `Knowledge` / `Kpi`, each referencing a department.
+- **Department-specific artifacts** get their own tables keyed to the owning department. Product/Research has `CompanyProfile`, `GuidanceSummary` and `Finding`, and the Probe's tables.
+- **Adding department #N** means one new row, plus optional extension tables. Existing departments are never touched.
 
-**Build order (planning doc §7) — all done:**
-| # | Increment | Status |
-|---|---|---|
-| 1 | Generic Department + shared anatomy; seed all six departments | ✅ Done (2026-07-06) |
-| 2 | Product/Research artifacts: Company Profile + Findings | ✅ Done (2026-07-08) |
-| 3 | Research Engine job (Ground→Gather→Hypothesize→Test→Queue), scheduled + Run-now | ✅ Done (2026-07-08) |
-| 4 | Review UI: inline approve/reject with written reason | ✅ Done (2026-07-08) |
-| 5 | Learning loop: distill + re-feed the Guidance Summary | ✅ Done (2026-07-09) |
+**Department routes:**
+- `src/app/(dashboard)/departments/[key]/page.tsx` serves `RESERVED` departments, and any `BUILT` department with no specific artifacts. Reserved ones show a `ReservedState` placeholder plus their seeded Knowledge/KPIs, read-only.
+- A `BUILT` department with its own artifacts gets a **static route tree** that shadows the dynamic one. So far that's only `departments/product-research/`, with its own `layout.tsx` tab bar.
+- Slug↔enum conversion lives in `src/lib/departments.ts`.
 
-**What Product/Research now has, concretely:** Goals/Tasks/Knowledge/KPIs (generic anatomy) + a Company Profile (editable, grounds agent *fit*) + a Guidance Summary (editable, grounds agent *relevance*, auto-distilled from validate/reject decisions each run) + Findings with a full `candidate → validated/rejected` lifecycle (inline Review UI, written reason required to reject) + a working Research Engine (`src/lib/research/`) that runs weekly (Monday 08:00 UTC) or on-demand via a rate-limited "Run now" button, gathering signal from Tavily, reasoning in two passes (Hypothesize then Test) via Claude, and writing deduplicated candidate Findings + a fifth tab, **Workflow**, hosting the Research Probe (below).
+**Product/Research, concretely:**
+- **Generic anatomy:** Goals, Tasks, Knowledge, KPIs.
+- **Company Profile:** editable; grounds the agent's *fit*.
+- **Guidance Summary:** editable; grounds the agent's *relevance*. It's auto-distilled from validate/reject decisions after each run.
+- **Findings:** `candidate → validated/rejected`, through an inline Review UI. A written reason is required to reject.
+- **Research Engine** (`src/lib/research/`):
+  - Ground → Gather (Tavily) → Hypothesize → Test (Claude) → Queue (dedupe).
+  - Runs weekly, Monday 08:00 UTC, on the Worker, or with a rate-limited **Run now** button.
+  - Contract: if a stage's output fails validation, the run aborts rather than retrying.
+- **Workflow tab: Research Probe** (below).
 
-**Research Probe (POC, built 2026-07-12/13) — deliberately separate from the Research Engine above, not a replacement for it.** Built after the owner found the Research Engine's Findings too generic (traced to shallow, market-wide Gather queries) — the Probe tests whether targeted, revealed-pain signal about **one specific, named company** produces sharper results. Key differences from the production engine, all deliberate:
-- **Own tables** (`ProbeRun`, `ProbeSignalItem`, `ProbeHypothesis`) — zero shared schema with `Finding`. `ProbeHypothesis` has no approval lifecycle at all (no candidate/validated/rejected equivalent — just a `confidence` rating); this is fine for a POC whose whole point is showing the owner everything, but don't assume the same "nothing goes live without explicit human action" gate (rule 4) extends to it without deciding that on purpose first if this ever graduates beyond a POC.
-- **Fully synchronous, no pg-boss/Worker involvement at all** (`src/lib/research-probe/engine.ts`) — the API route (`src/app/api/research-probe/run/route.ts`) awaits the whole Gather→Hypothesize→Test pipeline directly within one request (can take up to ~60s), relying on Railway's long-lived process rather than a job queue. This means the **web service**, not just the Worker, now calls Tavily and Anthropic directly.
-- **Gather is targeted at one company by name** (`src/lib/research-probe/gather.ts`): three fixed queries (`"<company> jobs"`, `"<company> careers"`, `"<company> reviews"`) via Tavily `search()`, plus the owner's own manual notes and/or specific URLs via Tavily `extract()`. Every signal item and every hypothesis (survivor or not) is persisted and shown in the Workflow tab's run-detail page — nothing is filtered or curated away, unlike the production engine's deterministic Queue step.
-- Full design/build history: `docs/superpowers/specs/2026-07-12-research-probe-poc-design.md` and `docs/superpowers/plans/2026-07-12-research-probe-poc.md`.
+**Research Probe (POC), deliberately separate from the Research Engine:**
+- **Own tables, zero shared schema with `Finding`:** `ProbeRun`, `ProbeSignalItem`, `ProbeHypothesis`, `ProbeReviewGuidance` (distilled cross-run noise patterns), and `ProbeDomainRule` (per-domain EXCLUDE / EXACT_MATCH search tuning that applies to every future run).
+  - `ProbeHypothesis` has **no approval lifecycle**, only a `confidence` value. Don't extend rule 4 to it, or graduate it beyond a POC, without deciding that on purpose.
+- **Fully synchronous, no pg-boss.** `POST /api/research-probe/run` awaits the whole pipeline (up to about 60s). This works because Railway runs a long-lived process. The **web** service calls Tavily and Anthropic directly.
+- **Pipeline** (`src/lib/research-probe/`):
+  1. **Gather** (`gather.ts`): targeted queries for one named company (jobs, careers, employee reviews), plus the owner's manual notes and URLs via `extract()`.
+  2. **Deepen** (`deepen.ts`): re-fetches shallow `search()` hits as full pages. It runs **before** Review, so Review's edits aren't clobbered later.
+  3. **Review** (`review.ts`, Haiku): drops same-name-different-company items and near-duplicates, and may strip clearly irrelevant blocks with `cleanedContent`. It never judges business relevance. Owner-supplied items (`MANUAL` / `TAVILY_EXTRACT`) are always kept.
+  4. **Hypothesize** → **Test**.
+- **Excluded noise is persisted but never shown in the UI.** This is the owner's explicit call: reading time is a real cost.
+- **History:** `docs/superpowers/specs/2026-07-1[2-5]-research-probe-*` and the matching plans.
 
-**Next department to build:** none started. Engineering/Marketing/Sales/Finance/Operations are still reserved seats (structure only — Department row + empty Goal/Task/Knowledge/Kpi tables). Building one out means repeating this exact pattern: read the planning doc, decide what (if any) department-specific artifacts it needs beyond the generic anatomy, and follow the file/route conventions below.
+## Auth & Security (current model — details in `docs/SECURITY.md`)
+- **Sign-in:** NextAuth v5 credentials with JWT sessions, plus Twilio Verify TOTP MFA. Enforced by `src/proxy.ts` for pages and `withAuth()` in `src/lib/rbac.ts` for APIs.
+- **Session refreshes never trust the browser:**
+  - On `useSession().update()`, `src/lib/auth.ts` re-reads `mfaEnabled` from the database.
+  - It sets `mfaVerified: true` only for a valid **server-signed proof** (`src/lib/mfa-proof.ts`): an HMAC bound to the user and that login's `sid`, 2-minute expiry.
+  - `/api/mfa/verify` and `/api/mfa/setup` issue the proof only after Twilio approves a code.
+  - `/api/mfa/setup` refuses (403) to re-enroll when MFA is already on and the session isn't verified.
+- **`src/lib/auth.config.ts` must stay edge-safe** (the proxy uses it): no Prisma, no Node crypto. Server-only checks go in `auth.ts`.
+- **Return-to-page and session-ended rules** live in `src/lib/auth-redirect.ts`:
+  - `safeCallbackUrl()` blocks open redirects.
+  - The `zx_signed_in` marker cookie powers the "your session ended" notice.
+  - Always sign out with `signOutDeliberately()` (`src/lib/sign-out.ts`).
+- **Rate limits:** login 5 attempts per 15 minutes per email; MFA verify 5 per 15 minutes per user; Research Run-now 1 per 5 minutes; Probe 1 per 2 minutes.
+- **MFA enrollment for the real admin account:** the owner has used the MFA flow on the dev site (2026-11-20). Still confirm `mfaEnabled` in the database before assuming it for any specific account.
 
-**Department routes:** the generic dynamic route `src/app/(dashboard)/departments/[key]/page.tsx` serves `RESERVED` departments (a `ReservedState` placeholder plus their seeded Knowledge/KPI content, shown read-only via a shared `KnowledgeAndKpi` component) and any `BUILT` department with no specific artifacts yet. A `BUILT` department with its own artifacts (so far, only Product/Research) gets a **static route tree** that shadows the dynamic one — `src/app/(dashboard)/departments/product-research/` with its own `layout.tsx` (tab bar) — Next.js resolves the static segment first, so this never touches the generic route or other departments. Slug↔enum conversion lives in `src/lib/departments.ts`.
-
-**Git / environments:** work happens on `development` only — `main` is production and stays untouched until the owner explicitly instructs a release. Railway's `development` environment (auto-deploy on) tracks this branch and is live; a `production` Railway environment is designed but not yet provisioned. See `docs/RAILWAY.md` and the Environments & Git Workflow doc above.
-
-## Production Status (as of 2026-07-13)
-
-- **Web:** `https://crm.zimplixio.com` (Cloudflare → Railway, SSL Full) — running v2. Also now calls Tavily and Anthropic directly (Research Probe, see above) — not just the Worker.
-- **Worker:** Railway `Worker` service — runs the `research.run` pg-boss job (singleton queue policy: at most one active run at a time; weekly cron + on-demand). First job registered since the legacy Python-pipeline handlers were deleted. Has no pre-deploy step (see rule 11) and no other jobs.
-- **MFA:** coded and enforced at both the page and API layer (see Security section of `docs/SECURITY.md`), with a real `/settings` page to enroll/disable — but as of this writing, not confirmed actually enrolled for the real admin account (local dev DB shows `mfaEnabled=false`, no `mfaSecret`). Don't assume enrollment is done just because the mechanism is built.
-- **Gmail OAuth / R2:** the Gmail-fetch + R2 market-context-cache pipeline that used these is gone with the rest of V1. The Google Cloud Console app and `zimplixio-marketing` R2 bucket likely still exist but are unused — not yet cleaned up.
+## Design System & Styling
+- **Tokens:** navy, forest-green and copper tokens in `src/app/globals.css` `:root`, mapped to Tailwind classes in `@theme inline` (`bg-navy-900`, `text-copper-500`, `border-line`…).
+  - Brand greens are `forest-*`, so Tailwind's own `green-*` is never overridden.
+  - No indigo anywhere.
+- **Spec:** `docs/superpowers/specs/2026-07-03-crm-v2-design-system.md`. Motion is "calm and fast" everywhere except the auth screens (§6.1), which deliberately use rich motion.
+- **Auth screens:**
+  - Shared scene in `src/app/(auth)/layout.tsx` → `AuthScene`.
+  - Components in `src/components/auth/`.
+  - All visuals and animations in `src/styles/auth.css`.
+  - The copper `.btn-accent` is primary there; green `.btn-primary` stays primary inside the app.
+- **The older dashboard pages still use inline styles** (roughly 90 `style={{}}` uses across about 17 files). Migrating them to the token classes is a known cleanup pass. Do it only when asked, not silently inside unrelated work.
 
 ## Tech Stack
-- **Framework**: Next.js App Router (server + client components)
-- **Language**: TypeScript (strict mode)
-- **Database**: PostgreSQL via Prisma ORM, driver adapter (`@prisma/adapter-pg`, see `src/lib/prisma.ts`). Datasource URL comes from `prisma.config.ts` (reads `process.env.DATABASE_URL` directly, not through `serverEnv`), not a `url = env(...)` line in `schema.prisma` — relevant to rule 11's Railway gotcha.
-- **Job queue**: pg-boss — one job registered, `research.run` (`src/lib/pgboss.ts`, handler in `worker/src/handlers/research.ts`), `policy: 'singleton'` so at most one run is ever active at once. Note: pg-boss's singleton policy only blocks a second *active* job, not a second *queued* one (its unique index is scoped to `state='active'`) — the Run-now route additionally checks `getQueueSize(..., { before: 'completed' })` before enqueueing, since that's the real "already in progress" guard.
-- **Auth**: NextAuth v5 (credentials + Twilio Verify TOTP MFA, kept from V1)
-- **Styles**: Tailwind CSS + Soft UI design system in `src/app/globals.css` — retheme'd to navy/forest-green/copper tokens as of the v2 rebuild (see Design System doc above); no indigo
-- **Charts**: Recharts (currently unused post-rebuild; was V1's dashboard chart library)
-- **Deployment**: Railway — two services (`Zimplixio_Office` web + `Worker`) sharing one Postgres addon. Web Push/VAPID notifications were V1-only and removed with the rest of V1 — not currently part of v2's scope
-- **Secrets hygiene**: gitleaks pre-commit hook via husky (`.husky/pre-commit`, rules in `.gitleaks.toml` — includes custom Anthropic/Tavily/Twilio key patterns since gitleaks' default rules miss hyphenated key formats)
+- **Framework:** Next.js 16 App Router (server + client components). `next dev` regenerates `AGENTS.md`; commit it.
+- **Language:** TypeScript (strict).
+- **Database:** PostgreSQL via Prisma 7 with the driver adapter (`@prisma/adapter-pg`, `src/lib/prisma.ts`).
+  - The datasource URL comes from `prisma.config.ts`, which reads `process.env.DATABASE_URL` directly.
+  - Keep `prisma`, `@prisma/client` and `@prisma/adapter-pg` on the same version.
+- **Job queue:** pg-boss. There's one job, `research.run` (`src/lib/pgboss.ts`, handler in `worker/src/handlers/research.ts`), with `policy: 'singleton'`. Run-now also checks `getQueueSize(..., { before: 'completed' })` (GOTCHAS #7).
+- **AI:** `src/lib/ai-client.ts` wraps Claude: PRIMARY Sonnet, FAST Haiku, HEAVY Opus. It tracks cost per call.
+- **Styles:** Tailwind CSS v4, token-based (see above).
+- **Charts:** Recharts, installed but currently unused.
+- **Deployment:** Railway, two services (`Zimplixio_Office` web + `Worker`) sharing one Postgres.
+- **Secrets hygiene:** gitleaks pre-commit hook (`.husky/pre-commit`, rules in `.gitleaks.toml`, including custom Anthropic/Tavily/Twilio key patterns).
 
 ## Architecture Pattern
-Server components fetch data from Prisma and pass it as serialized props to `*Client.tsx` client components. Never call Prisma directly from client components. API routes handle all mutations and job enqueues (pg-boss). The pattern is:
+Server components fetch data from Prisma and pass it as serialized props to `*Client.tsx` client components. Never call Prisma from client components. API routes handle all mutations and job enqueues. The auth pages follow this too: a server `page.tsx` (metadata, validated search params) renders `*Client.tsx`.
 
 ```
 page.tsx (server)  →  props  →  PageClient.tsx (client)
@@ -70,45 +111,57 @@ page.tsx (server)  →  props  →  PageClient.tsx (client)
                                     Prisma
 ```
 
+**Tab titles:** the root layout sets `title.template = '%s · Zimplixio Office'`. A page sets only `export const metadata = { title: '…' }`.
+
 ## Key Development Notes
 
-### Running on Apple Silicon (M-series Mac)
-The project uses an x86_64 Node binary via nvm. If `node` is not found in PATH in Claude Code's shell context, prefix commands:
+**Node:** the nvm Node 20 binary is native **arm64** now. If `node` isn't on PATH in Claude Code's shell, prefix commands like this:
 ```bash
-PATH="/Users/josephugaldeberrocal/.nvm/versions/node/v20.20.2/bin:$PATH" arch -x86_64 npx tsc --noEmit
+PATH="$HOME/.nvm/versions/node/v20.20.2/bin:$PATH" npx tsc --noEmit
 ```
-Normal terminal usage with nvm loaded works fine.
+Don't use `arch -x86_64`; it fails with "Bad CPU type".
 
-### TypeScript checks
-```bash
-PATH="$HOME/.nvm/versions/node/v20.20.2/bin:$PATH" arch -x86_64 npx tsc --noEmit 2>&1 | grep -v "validator.ts"
-```
-The `validator.ts` warning is a stale `.next/types` artifact — safe to ignore, clears on next full build.
-
+**Local testing:**
+- Run `next dev` on the port in `NEXTAUTH_URL` (3000).
+- Load `.env` with `npx tsx --env-file=.env`, not shell `source`.
+- Use a throwaway local test user, and delete it afterwards.
+- Repeated logins trip the 5/15-minute rate limit; clear that user's `RateLimit` rows in the **local** database.
+- Headless Playwright is available (Python, cached Chromium) for live UI checks when the Chrome extension isn't connected.
+- More detail in GOTCHAS #22–27.
 
 ## Rules
-1. **Always run TypeScript check after changes** — `tsc --noEmit` before declaring done
-2. **Server components fetch data; client components own UI state** — never blur this boundary
-3. **Prisma schema is the single source of truth** — run `prisma migrate dev` after any model change
-4. **Nothing goes live without explicit human action** — Findings only ever reach `VALIDATED`/`REJECTED` via an owner clicking Validate/Reject (`src/components/departments/CandidateFindingRow.tsx`); the Research Engine can only ever write `status: 'CANDIDATE'`. Preserve this invariant in every future department's agent work.
-5. **Use lazy initialization for SDK clients** — never call `new Anthropic()`, `twilio()`, or a Tavily/other client constructor at module level. `next build` runs module-level code without env vars injected, causing crashes. Wrap in a lazy getter called at request time (see `getAnthropic()` in `src/lib/ai-client.ts`, `getTavily()` in `src/lib/research/tavily.ts`).
-6. **CRM v2 rebuild in progress** — scope and architecture are both locked (see the CRM v2 section above); the original build order (planning §7) is complete. Building the next department follows the same pattern (generic anatomy first, specific artifacts only if the planning doc calls for them) — don't build a department's specific artifacts ahead of what's actually been asked for.
-7. **Auth-gated / DB-backed pages must force dynamic rendering** — add `export const dynamic = 'force-dynamic'` to any page/layout/API route that calls `auth()` or queries Prisma. `src/lib/env.ts` deliberately returns an empty env object during `next build` (so the build doesn't need real secrets), which means any page Next.js tries to statically prerender at build time will crash if it touches the DB. This bit us once already (`src/app/(dashboard)/page.tsx` + `layout.tsx`).
-8. **Before trusting any dependency/security fix, verify with a clean `rm -rf node_modules && npm ci && npm run build`** — not just `tsc --noEmit` or `next dev`. `npm audit fix --force` can silently rewrite unrelated package versions (it once downgraded the `prisma` CLI to a major version incompatible with `@prisma/client`, which only broke on a clean install/build — `next dev` and a stale local Prisma client masked it completely). Also: don't re-run `--force` reflexively if a later advisory suggests "fixing" something by reverting a version you just fixed — check what it's actually proposing first.
-9. **For Zod→Anthropic tool schemas, use Zod v4's native `z.toJSONSchema()`** (`src/lib/ai/json-schema.ts`), not the third-party `zod-to-json-schema` package — its v3.x line reads Zod's internal `_def` structure directly, which changed shape in Zod v4, and it silently returns `{}` (no error) rather than failing loudly. This produced a real 400 from Anthropic ("input_schema.type: Field required") that only showed up on an actual API call, not in `tsc` or local schema construction — always sanity-check a new Anthropic tool schema's actual JSON output (`console.log(TOOL.input_schema)`) before trusting it end-to-end.
-10. **Any Claude-structured-output field with a length limit needs headroom** — Claude will write longer/more natural phrasing than a tight `.max()` suggests. Give schema limits meaningful slack over the "target" length mentioned in the field's `.describe()` text (e.g. target 200 chars, hard cap 300), or a validation failure silently aborts that pipeline stage (by design — see the Research Engine's abort-not-retry contract in `src/lib/research/engine.ts` — but still wastes the run if the limit is just wrong).
-11. **A shared root-level Railway config change (`railway.toml`) must be verified against *every* service independently, never assumed to apply identically.** Adding `[deploy] preDeployCommand = ["npx prisma migrate deploy"]` to fix manual migrations worked fine for `Zimplixio_Office` (Railpack build) but broke `Worker` (Dockerfile build) outright — its pre-deploy step couldn't see `DATABASE_URL` even though it's correctly set on that service's own Variables tab, a Railway platform limitation specific to that service's execution context, not a code bug. A per-service dashboard override was tried as a fix and silently didn't take effect (config-as-code kept winning over the dashboard setting) — don't assume dashboard settings override `railway.toml`. The actual fix: remove the setting from `railway.toml` entirely and set it directly on the one service's own dashboard instead (see `docs/RAILWAY.md`'s "Database migration" section).
-12. **`@tavily/core`'s `search()` and `extract()` disagree on the unit of their `timeout` option** — `search()` accepts milliseconds without complaint, `extract()` requires seconds (1–120) and throws `"timeout must be between 1 and 120 seconds"` otherwise. Passing the same millisecond constant to both (as `src/lib/research-probe/gather.ts` originally did) makes every `extract()` call fail — and if it's wrapped in a try/catch that just logs a warning (as it is there, by design, so one bad URL doesn't kill a whole run), this fails **silently**, with no user-visible error. Use separate, correctly-unit'd constants for the two calls (see `EXTRACT_TIMEOUT_SECONDS` vs `PER_CALL_TIMEOUT_MS` in that file) — and sanity-check any new Tavily `extract()` call against a real URL before trusting it, the same way rule 9 says to sanity-check a new Anthropic tool schema.
+1. **Always run the TypeScript check after changes** (`tsc --noEmit`) before declaring done. Run lint on touched files too.
+2. **Server components fetch data; client components own UI state.** Never blur this boundary.
+3. **The Prisma schema is the single source of truth.** Run `prisma migrate dev` after any model change.
+4. **Nothing goes live without explicit human action.** Findings only ever reach `VALIDATED`/`REJECTED` when the owner clicks Validate/Reject (`src/components/departments/CandidateFindingRow.tsx`); the Research Engine can only write `status: 'CANDIDATE'`. Preserve this in every future department's agent work.
+5. **Styling comes from the shared system, never per page:** tokens + `@theme` classes, shared components, and stylesheets (`src/styles/*.css`) whose visuals are driven by `data-*` state. There's no inline `style={{}}` and no hex in TSX. The only exception is per-instance random data, passed as CSS custom properties. When you add a pattern, document it in the design spec. (GOTCHAS #16–19)
+6. **The repo is public.** See the warning at the top. Check new docs, specs, seed data and code comments for client, prospect or personal details before committing.
+7. **Lazy SDK clients:** never construct Anthropic, Twilio, Tavily or other clients at module level. (GOTCHAS #1)
+8. **`export const dynamic = 'force-dynamic'`** on any page, layout or route that calls `auth()` or Prisma. (GOTCHAS #2)
+9. **After any dependency change, verify with `rm -rf node_modules && npm ci && npm run build`.** Never run `npm audit fix --force` reflexively, and never accept a major downgrade as a "fix". (GOTCHAS #4–5)
+10. **Anthropic tool schemas:** use Zod v4's `z.toJSONSchema()` (`src/lib/ai/json-schema.ts`). Log the output once before trusting it. (GOTCHAS #8)
+11. **Leave headroom on Claude structured-output length limits.** (GOTCHAS #9)
+12. **Shared `railway.toml` changes must be verified on every service separately.** Dashboard settings don't override config-as-code. (GOTCHAS #6)
+13. **Tavily `search()` timeouts are in ms; `extract()` timeouts are in seconds.** Test new `extract()` calls against a real URL. (GOTCHAS #10)
+14. **Never trust `useSession().update()` payloads.** Any new session field gets server-side verification in `src/lib/auth.ts`. Any `skipMfaCheck` route needs its own password-only-session guard. (GOTCHAS #12–13)
+15. **Validate every return-to URL** with `safeCallbackUrl()`. (GOTCHAS #15)
 
 ## Key Environment Variables
-
-See `docs/ENV.md` for the full reference. Vars that affect code behavior:
+Full reference in `docs/ENV.md`. The variables that affect code behavior:
 
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
-| `AUTH_TRUST_HOST` | Set to `1` in production — required behind Cloudflare proxy |
-| `ANTHROPIC_API_KEY` | Claude API — used by the Research Engine's Hypothesize/Test/Distill calls (`src/lib/ai-client.ts`) and by the Research Probe's Hypothesize/Test calls (`src/lib/research-probe/`) |
-| `TAVILY_API_KEY` | Tavily search API — used by the Research Engine's Gather step (`src/lib/research/tavily.ts`) and the Research Probe's Gather step (`src/lib/research-probe/gather.ts`). Required on **both** Railway services (env validated at boot on both) — and since the Research Probe calls Tavily directly from the web service, this is no longer just a "validated but unused" var there |
+| `NEXTAUTH_URL` / `NEXTAUTH_SECRET` | Auth base URL and signing secret (the secret also derives the MFA-proof key) |
+| `AUTH_TRUST_HOST` | `1` in production, required behind the Cloudflare proxy |
+| `ANTHROPIC_API_KEY` | Claude: Research Engine (Worker) and Research Probe (web) |
+| `TAVILY_API_KEY` | Tavily: required on **both** Railway services (validated at boot on both; the Probe calls it from web) |
+| `TWILIO_*` | Twilio Verify TOTP MFA |
+| `SEED_EMAIL` / `SEED_PASSWORD` | Used by `npm run seed`; always set both |
 
-> **Legacy vars (V1/Python-pipeline era):** `PIPELINE_USE_QUEUE`, `MARKETING_DIR` — the code paths that used them are deleted; `src/lib/env.ts` still declares them as optional so nothing crashes if they're still set in Railway, but they're dead weight and can be removed from Railway env whenever convenient.
+> **Legacy:** `PIPELINE_USE_QUEUE` and `MARKETING_DIR` are still declared optional in `src/lib/env.ts` but unused. Remove them from Railway whenever convenient. The npm scripts `backfill:post-versions`, `trigger:stale-check` and `test:whatsapp` are V1 leftovers; the first two point at files that no longer exist.
+
+## Git / Environments
+- Work happens on `development` only. `main` is production and stays untouched until the owner explicitly asks for a release.
+- Railway's `development` environment auto-deploys this branch and serves `crm.zimplixio.com`. A `production` Railway environment is designed but not yet provisioned.
+- **The owner makes all commits and pushes.** Leave changes in the working tree, and give literal commands (using `-m` so Vim doesn't open).

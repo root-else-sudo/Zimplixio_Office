@@ -28,6 +28,7 @@ Both services (`Zimplixio_Office` web + `Worker`) share the same env schema and 
 | `TWILIO_SMS_FROM` | optional | `sendSMS()` in `src/lib/twilio.ts` — not currently called anywhere; kept as optional infra for a future notification feature |
 | `SMS_NOTIFY_TO` | optional | pairs with `TWILIO_SMS_FROM` |
 | `LOG_LEVEL` | optional (default `info`) | `pino` logger — one of `fatal\|error\|warn\|info\|debug\|trace` |
+| `SEED_EMAIL` / `SEED_PASSWORD` | seeding only | `prisma/seed.ts` — the admin account `npm run seed` creates. Not part of the boot schema. **Always set both explicitly** — don't rely on the script's built-in fallbacks (this repo is public) |
 
 > **Legacy vars (V1/Python-pipeline era):** `PIPELINE_USE_QUEUE`, `MARKETING_DIR` — still declared as optional in the schema so nothing crashes if they're still set in Railway, but no code path uses them anymore. Safe to remove from Railway whenever convenient.
 
@@ -42,13 +43,14 @@ Use Railway's reference variables (`${{Postgres.DATABASE_URL}}`) so both service
 
 ## Local dev
 
-Keep your `.env` (gitignored) at the repo root. Required minimum to boot:
+Keep your `.env` (gitignored) at the repo root. Run `next dev` on the port named in `NEXTAUTH_URL` (post-login redirects go there), and load `.env` in scripts with `npx tsx --env-file=.env` rather than shell `source` (see `docs/GOTCHAS.md` #23, #27). Required minimum to boot:
 
 ```
 DATABASE_URL=postgresql://...
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=<32+ chars>
 ANTHROPIC_API_KEY=sk-ant-...
+TAVILY_API_KEY=tvly-...
 TWILIO_ACCOUNT_SID=...
 TWILIO_AUTH_TOKEN=...
 TWILIO_VERIFY_SERVICE_SID=...
