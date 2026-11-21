@@ -150,3 +150,17 @@
 .admin-muted {
   @apply text-slate-600;
 }
+
+/* Loading skeletons (admin loading.tsx). Pulse is neutralised by the global
+   prefers-reduced-motion rule in globals.css. */
+.skeleton-bar {
+  @apply block animate-pulse rounded-md bg-slate-200;
+}
+.skeleton-th { @apply h-3 w-16; }
+.skeleton-cell { @apply h-3.5 w-20; }
+.skeleton-cell-wide { @apply h-3.5 w-40; }
+.skeleton-button { @apply h-9 w-32 rounded-xl; }
+.skeleton-back { @apply h-4 w-28; }
+.skeleton-heading { @apply h-5 w-56; }
+.skeleton-line { @apply h-3.5 w-full max-w-md; }
+.skeleton-line-short { @apply h-3.5 w-64; }
