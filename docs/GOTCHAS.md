@@ -263,3 +263,9 @@ Grouped by area:
 - **What happened:** fully prefetching the admin tabs made switching instant (about 30 ms). But after a session was revoked, clicking an already-prefetched tab rendered it from the client router cache with no server request, so the proxy and guards never ran.
 - **Why:** the user is never shown *new* data, and mutations are still refused. But the step-1 guarantee (`sessionVersion` revocation applies on the next click) silently stops holding for prefetched routes.
 - **Rule:** never use `prefetch={true}` on routes behind the access wall (`(dashboard)`, `(portal)`, `(account)`, `/admin`). The default prefetch is fine: it only caches the shell down to `loading.tsx`, so the page payload is still fetched, and guarded, on click. `src/components/ui/SectionTabs.tsx` documents this.
+
+### 33. A database in another region makes every page slow, however small the data
+
+- **What happened:** the app felt slow with an almost empty database. Postgres was in EU West while the web service and Worker were in US East. Every query crossed the Atlantic (about 120–160 ms per lookup), and a page makes several lookups in sequence.
+- **How it was found:** compare a public page that does no DB work (`/login`) against one that does a single lookup (`/invite/<random token>`) on the live site. The difference is the per-lookup cost. Then check each service's **Settings → Scale → Regions & Replicas**.
+- **Rule:** keep all services in one region (see `docs/RAILWAY.md`, "Regions"). Back up before moving a database's region.

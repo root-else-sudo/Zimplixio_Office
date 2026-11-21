@@ -33,6 +33,19 @@ The project deploys as **two Railway services in one project**, sharing one Post
 - Web: `https://crm.zimplixio.com` (custom domain via Cloudflare CNAME)
 - Railway internal: `zimplixiooffice-production.up.railway.app`
 
+## Regions: keep every service in the same one
+
+All three services run in **US East (Virginia)**: `Zimplixio_Office`, `Worker` and `Postgres`. Check this in each service's **Settings → Scale → Regions & Replicas**.
+
+**Why it matters:**
+- The web service makes several database round trips per page, one after another. That includes the proxy's per-request session check (see `docs/SECURITY.md`).
+- On 2026-11-21 Postgres turned out to be in **EU West (Amsterdam)** while the app and Worker were in US East. Each lookup cost about 120–160 ms instead of a few milliseconds, admin tab changes took about 300–400 ms, and a cold connection took about 690 ms.
+- Moving Postgres to US East (Railway migrated its volume, with a few minutes of downtime) brought a DB-backed page down from about 220 ms to about 90 ms.
+
+**When creating any new service or environment** (including the future `production` environment), put it in the same region as the database. Back up Postgres before ever changing its region.
+
+The database is reached over the private network only (`postgres.railway.internal`, referenced as `${{Postgres.DATABASE_URL}}`). Public networking is off, so there is no `DATABASE_PUBLIC_URL`. Out-of-band commands that need a public URL require temporarily enabling Postgres's TCP proxy.
+
 ## Service: `Zimplixio_Office` (web)
 
 ### Build
