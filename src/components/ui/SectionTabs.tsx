@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { LinkPendingHint } from './LinkPendingHint'
 
 export type SectionTab = { href: string; label: string }
 
@@ -9,7 +10,8 @@ export type SectionTab = { href: string; label: string }
 // Deliberately NOT prefetch={true}: a fully prefetched admin route renders from
 // the client cache on click, so a revoked session would keep seeing those pages
 // instead of being signed out (breaks the "signed out on next click" rule).
-// Each route's loading.tsx gives instant feedback instead.
+// A pending cue (LinkPendingHint) gives feedback on slow clicks instead of
+// route skeletons, which would force React's ≥300ms fallback minimum.
 export default function SectionTabs({ tabs }: { tabs: SectionTab[] }) {
   const pathname = usePathname()
   return (
@@ -24,6 +26,7 @@ export default function SectionTabs({ tabs }: { tabs: SectionTab[] }) {
             className={active ? 'admin-tab admin-tab-active' : 'admin-tab'}
           >
             {label}
+            {!active && <LinkPendingHint variant="underline" />}
           </Link>
         )
       })}

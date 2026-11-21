@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, KeyRound } from 'lucide-react'
 import InviteLinkCard from '@/components/admin/InviteLinkCard'
 import { formatDateTime } from '@/lib/admin/format'
+import { LinkPendingHint } from '@/components/ui/LinkPendingHint'
 
 type User = {
   id: string
@@ -81,7 +82,7 @@ export default function UserDetailClient({ user, isSelf }: { user: User; isSelf:
   return (
     <div className="space-y-6">
       <Link href="/admin/users" className="admin-back inline-flex items-center gap-1.5">
-        <ArrowLeft className="h-4 w-4" /> All users
+        <ArrowLeft className="h-4 w-4" /> All users<LinkPendingHint />
       </Link>
 
       {issued && (
@@ -99,7 +100,7 @@ export default function UserDetailClient({ user, isSelf }: { user: User; isSelf:
             <h2 className="admin-section-title">{user.name}</h2>
             <p className="admin-note">
               {user.email} ·{' '}
-              <Link href={`/admin/companies/${user.companyId}`} className="admin-table-link">{user.companyName}</Link>
+              <Link href={`/admin/companies/${user.companyId}`} className="admin-table-link">{user.companyName}<LinkPendingHint /></Link>
             </p>
           </div>
           <span className={`badge ${badge(user.status)}`}>

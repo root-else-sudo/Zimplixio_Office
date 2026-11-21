@@ -246,23 +246,21 @@ Grouped by area:
 - **What happened:** nothing yet, by design. Tests create and delete users and companies, so running them against the dev database would destroy real rows.
 - **Rule:** `test/setup/guard.ts` throws unless `DATABASE_URL_TEST` is set and names a database ending in `_test`. Create the database once and point `DATABASE_URL_TEST` at it; never weaken or bypass the guard.
 
-### 31. A `force-dynamic` page without `loading.tsx` feels frozen, and a skeleton costs at least 300 ms
+### 31. Fresh-per-request pages: no skeletons for fast loads, use `useLinkStatus` instead
 
-- **What happened:** the `/admin` tabs felt laggy even with an empty database.
-- **Why:**
-  - Admin pages render fresh on every request. Without a `loading.tsx`, Next.js shows no feedback until the server responds, and it can't partially prefetch the route.
-  - On Railway, each DB round trip was measured at 60–100 ms, and a tab change makes 3–5 of them in sequence.
-  - Adding `loading.tsx` made feedback instant (about 22 ms). But React keeps a revealed Suspense fallback up for at least ~300 ms (`FALLBACK_THROTTLE_MS`), so on a fast server the content arrives later than it would without a skeleton.
+- **What happened:** the `/admin` tabs felt laggy. With no `loading.tsx`, a click gave no feedback until the server answered.
+  - Adding `loading.tsx` skeletons made feedback instant (about 22 ms). But React keeps a revealed Suspense fallback up for at least ~300 ms (`FALLBACK_THROTTLE_MS`), so once the server was fast (about 100–150 ms after fixing the DB region, see #33), the skeleton made content arrive later and flash.
 - **Rule:**
-  - Give every user-facing `force-dynamic` route a `loading.tsx` skeleton (shared components in `src/components/admin/AdminSkeletons.tsx`).
-  - Fix server latency at its source (DB connectivity, sequential round trips) rather than leaning on skeletons.
-  - Measure real clicks on a production build, not `next dev`. See the `feedback_perceived_performance` memory.
+  - For pages that usually answer fast, don't add `loading.tsx`. Put `LinkPendingHint` (`src/components/ui/LinkPendingHint.tsx`, built on Next's `useLinkStatus`) inside the `<Link>`.
+  - It shows a subtle cue only if the navigation takes longer than about 100 ms, and adds no Suspense floor.
+  - Reserve `loading.tsx` skeletons for genuinely slow pages (over about 500 ms).
+  - Measure real clicks on a production build, never `next dev` (see the `feedback_perceived_performance` memory).
 
 ### 32. `<Link prefetch={true}>` on guarded pages bypasses "signed out on next click"
 
 - **What happened:** fully prefetching the admin tabs made switching instant (about 30 ms). But after a session was revoked, clicking an already-prefetched tab rendered it from the client router cache with no server request, so the proxy and guards never ran.
 - **Why:** the user is never shown *new* data, and mutations are still refused. But the step-1 guarantee (`sessionVersion` revocation applies on the next click) silently stops holding for prefetched routes.
-- **Rule:** never use `prefetch={true}` on routes behind the access wall (`(dashboard)`, `(portal)`, `(account)`, `/admin`). The default prefetch is fine: it only caches the shell down to `loading.tsx`, so the page payload is still fetched, and guarded, on click. `src/components/ui/SectionTabs.tsx` documents this.
+- **Rule:** never use `prefetch={true}` on routes behind the access wall (`(dashboard)`, `(portal)`, `(account)`, `/admin`). The default prefetch is fine: the page payload is still fetched, and guarded, on click. `src/components/ui/SectionTabs.tsx` documents this.
 
 ### 33. A database in another region makes every page slow, however small the data
 

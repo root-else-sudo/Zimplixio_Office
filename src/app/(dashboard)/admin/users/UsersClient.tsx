@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { UserPlus } from 'lucide-react'
 import InviteLinkCard from '@/components/admin/InviteLinkCard'
 import { formatDateTime } from '@/lib/admin/format'
+import { LinkPendingHint } from '@/components/ui/LinkPendingHint'
 
 type CompanyOpt = { id: string; name: string; status: 'ACTIVE' | 'DEACTIVATED' }
 type Row = {
@@ -188,7 +189,7 @@ export default function UsersClient({
             <tbody>
               {users.map(u => (
                 <tr key={u.id}>
-                  <td><Link href={`/admin/users/${u.id}`} className="admin-table-link">{u.name}</Link></td>
+                  <td><Link href={`/admin/users/${u.id}`} className="admin-table-link">{u.name}<LinkPendingHint /></Link></td>
                   <td>{u.email}</td>
                   <td>{u.companyName}</td>
                   <td><span className={`badge ${badge(u.status)}`}>{label(u.status)}</span></td>

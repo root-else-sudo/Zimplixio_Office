@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
+import { LinkPendingHint } from '@/components/ui/LinkPendingHint'
 
 type Row = {
   id: string
@@ -107,7 +108,7 @@ export default function CompaniesClient({ companies }: { companies: Row[] }) {
               {companies.map(c => (
                 <tr key={c.id}>
                   <td>
-                    <Link href={`/admin/companies/${c.id}`} className="admin-table-link">{c.name}</Link>
+                    <Link href={`/admin/companies/${c.id}`} className="admin-table-link">{c.name}<LinkPendingHint /></Link>
                   </td>
                   <td>
                     <span className={`badge ${c.kind === 'INTERNAL' ? 'badge-kind-internal' : 'badge-kind-client'}`}>

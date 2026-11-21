@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, UserPlus } from 'lucide-react'
+import { LinkPendingHint } from '@/components/ui/LinkPendingHint'
 
 type Company = {
   id: string
@@ -64,7 +65,7 @@ export default function CompanyDetailClient({ company }: { company: Company }) {
   return (
     <div className="space-y-6">
       <Link href="/admin/companies" className="admin-back inline-flex items-center gap-1.5">
-        <ArrowLeft className="h-4 w-4" /> All companies
+        <ArrowLeft className="h-4 w-4" /> All companies<LinkPendingHint />
       </Link>
 
       <div className="soft-card admin-card">
@@ -161,7 +162,7 @@ export default function CompanyDetailClient({ company }: { company: Company }) {
                 {company.users.map(u => (
                   <tr key={u.id}>
                     <td>
-                      <Link href={`/admin/users/${u.id}`} className="admin-table-link">{u.name}</Link>
+                      <Link href={`/admin/users/${u.id}`} className="admin-table-link">{u.name}<LinkPendingHint /></Link>
                     </td>
                     <td>{u.email}</td>
                     <td><span className={`badge ${userBadge(u.status)}`}>{label(u.status)}</span></td>
