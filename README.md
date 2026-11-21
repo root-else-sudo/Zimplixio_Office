@@ -114,20 +114,21 @@ The whole scene is built from the shared design system rather than one-off styli
 
 ## Testing
 
-There's **no automated test suite yet**. Changes are verified with type checks, lint, a clean production build, and live checks against a running server:
+An automated **Vitest** suite covers the access-control layer (account rules, session revocation, route guards, the proxy rules, `withAuth`, tenancy and the migration). It runs against a separate database whose name must end in `_test` (set `DATABASE_URL_TEST`); the suite refuses to start otherwise.
 
 ```bash
+npm test                                # Vitest suite
 npx tsc --noEmit                        # type check (app + worker code)
 npx eslint src                          # lint
 rm -rf node_modules && npm ci && npm run build   # required after any dependency change
 ```
 
-Live checks are ad-hoc Playwright and `curl` scripts run against `next dev`, using a throwaway local test user that's deleted afterwards. Examples include the full sign-in and MFA flow, the MFA bypass attempts listed above, and the open-redirect check. Turning these into a committed test suite is one of the known gaps below.
+Beyond the suite, changes are verified with live checks: ad-hoc Playwright and `curl` scripts run against `next dev`, using throwaway local test users that are deleted afterwards (the full sign-in and MFA flow, the MFA bypass attempts, the open-redirect check, client-portal lockout and session revocation).
 
 ## Known Gaps
 
-- **No automated tests.** See Testing.
-- **No user or company management yet.** There's no screen to invite users, assign roles or group users by client company. This is the next module to be built.
+- **Limited automated tests.** The access layer has a Vitest suite; the research and review features do not yet. See Testing.
+- **User and company management is in progress.** Step 1 (companies, client accounts, the access wall, revocation) is built. There is still no screen to invite users or assign roles; use the interim CLI below until step 2 lands.
 - **No password reset or MFA recovery codes.** There's no email-sending service yet. A lost authenticator currently needs a manual database change.
 - **No audit log.** Logins, MFA events and Finding approvals are recorded only in application logs, not in a queryable table.
 - **Goals and Tasks have no create screen.** The tables exist, but there's no UI or API to add rows.
@@ -286,12 +287,16 @@ Migrations run automatically before each web deploy, through a Pre-Deploy Comman
 
 ## Admin
 
-There's no admin panel yet; user and company management is the next module. Until then:
+There's no admin panel yet; user and company management is in progress (step 1 of 5 is built). Until then:
 
 | Task | How |
 |---|---|
 | Create the first admin | `npm run seed` with `SEED_EMAIL` / `SEED_PASSWORD` |
-| Turn two-step sign-in on or off | `/settings` (turning it off requires a verified session) |
+| Check two-step sign-in status | `/settings` (status only; MFA is mandatory and can't be self-disabled) |
+| Create a client account | `npm run access -- create-client --company "<name>" --email <e> --name "<n>" --password <p>` (they enroll MFA at first sign-in) |
+| Deactivate or reactivate a user | `npm run access -- deactivate-user --email <e>` / `reactivate-user --email <e>` |
+| End a user's live sessions | `npm run access -- bump-session --email <e>` |
+| Deactivate a client company | `npm run access -- deactivate-company --name "<n>"` (ends all members' sessions) |
 | Inspect or fix data | `npx prisma studio` |
 | Trigger research | **Run now** on Product/Research, or wait for Monday's scheduled run |
 

@@ -1,0 +1,54 @@
+/* Client portal shell. Colors/spacing come from the design tokens. */
+.portal-shell {
+  @apply min-h-screen bg-canvas;
+}
+.portal-topbar {
+  @apply flex items-center justify-between gap-4 border-b border-line bg-surface px-6 py-3;
+}
+.portal-brand {
+  @apply flex items-center gap-3;
+}
+.portal-company {
+  @apply text-sm font-semibold text-navy-900;
+}
+.portal-actions {
+  @apply flex items-center gap-4;
+}
+.portal-link {
+  @apply text-sm font-medium text-forest-600 hover:underline;
+}
+.portal-main {
+  @apply mx-auto w-full max-w-5xl px-6 py-10;
+}
+.portal-page {
+  @apply flex flex-col gap-4;
+}
+.portal-title {
+  @apply text-2xl font-semibold text-navy-900;
+}
+.portal-empty {
+  @apply p-8 text-sm text-slate-600;
+}
+
+/* Account settings (shared by staff and client shells). */
+.settings-page {
+  @apply mx-auto max-w-4xl space-y-6 px-8 py-10;
+}
+.settings-title {
+  @apply text-2xl font-bold text-charcoal-800;
+}
+.settings-card {
+  @apply space-y-4 p-6;
+}
+.settings-card-title {
+  @apply text-base font-semibold text-charcoal-800;
+}
+.settings-card-text {
+  @apply mt-1 text-sm text-slate-600;
+}
+.settings-status {
+  @apply text-sm font-medium text-slate-600;
+}
+.settings-status-on {
+  @apply text-forest-600;
+}

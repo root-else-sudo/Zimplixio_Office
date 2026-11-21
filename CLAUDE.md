@@ -17,7 +17,9 @@ V1 (Posts/LinkedIn, Projects/Gantt, Opportunities, a separate Python repo) was r
 - **MFA bypasses closed (2026-11-19).** See Security below.
 - **Dependencies (2026-11-18):** 32 npm advisories fixed and all stale Dependabot branches deleted. One advisory (`effect`, Prisma CLI only) is knowingly accepted (GOTCHAS #5).
 
-**Next:** an **access-management module**: users, roles, client companies and invitations. Not started. It will likely bring email sending (for invites and password reset) and MFA recovery codes.
+- **Access Management step 1 (Foundation), 2026-11-20:** companies, staff vs client accounts, the deny-by-default wall (proxy + guards + `withAuth`), client portal shell, immediate session revocation via `sessionVersion`, mandatory MFA, interim admin CLI (`npm run access`), Vitest suite (`npm test`). Built and live-verified locally; spec at `docs/superpowers/specs/2026-11-20-access-management-design.md`. Revocation is enforced per request by a DB-backed session check in the proxy (resolved: layouts/templates alone miss in-group soft navigation).
+
+**Next:** access-management step 2 (admin screens, invite links), then step 3 (Twilio delivery of invites and password reset). MFA recovery codes are still a gap.
 
 **Not built yet:** Engineering, Marketing, Sales, Finance and Operations are reserved seats (Department row + empty Goal/Task/Knowledge/Kpi tables). Building one repeats the Product/Research pattern below.
 
@@ -145,6 +147,10 @@ Don't use `arch -x86_64`; it fails with "Bad CPU type".
 13. **Tavily `search()` timeouts are in ms; `extract()` timeouts are in seconds.** Test new `extract()` calls against a real URL. (GOTCHAS #10)
 14. **Never trust `useSession().update()` payloads.** Any new session field gets server-side verification in `src/lib/auth.ts`. Any `skipMfaCheck` route needs its own password-only-session guard. (GOTCHAS #12–13)
 15. **Validate every return-to URL** with `safeCallbackUrl()`. (GOTCHAS #15)
+16. **`withAuth` defaults to staff-only.** A client calling a staff API gets 404. Only opt in to `audience: 'any'` (or a stricter option) deliberately, and never wrap a route in anything weaker. `test/api-coverage.test.ts` enforces that every route is wrapped. (SECURITY.md)
+17. **Revocation is enforced in the proxy, with guards as defense in depth.** `src/proxy.ts` runs a DB-backed session check (`isSessionStillActive`, `src/lib/proxy-session.ts`) on every logged-in page request except `/login`, before MFA/enrollment/kind redirects; failure or DB error goes to `/api/session/end`. Also keep `requireStaff`/`requireClient`/`requireSignedIn` in BOTH `layout.tsx` and `template.tsx` of every route group. A layout-only guard is not a revocation boundary: layouts and templates don't re-run for in-group soft navigation. Test revocation with a real click, not `page.goto`. (GOTCHAS #28, #29)
+18. **`tenantDb` (`src/lib/tenancy.ts`) is the only path to tenant-owned data.** No raw Prisma queries on client-owned models; add each new model to `TENANT_OWNED_MODELS`.
+19. **`npm test` (Vitest) must pass before declaring done.** Tests run against a separate `_test` database (`DATABASE_URL_TEST`); the guard refuses anything else. (GOTCHAS #30)
 
 ## Key Environment Variables
 Full reference in `docs/ENV.md`. The variables that affect code behavior:

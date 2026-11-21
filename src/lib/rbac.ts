@@ -1,20 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import type { Session } from 'next-auth'
 import { auth } from './auth'
 import { apiError } from './errors'
+import { getActiveSession, type ActiveSession } from './session-guard'
 
 export type Role = 'ADMIN' | 'REVIEWER'
 
 export type AuthedSession = Session & {
-  user: NonNullable<Session['user']> & { id: string; role: Role }
-}
-
-const ROLE_RANK: Record<Role, number> = { REVIEWER: 1, ADMIN: 2 }
-
-export function hasRole(actual: string | undefined, required: Role): boolean {
-  if (!actual) return false
-  const a = ROLE_RANK[actual as Role]
-  return typeof a === 'number' && a >= ROLE_RANK[required]
+  user: NonNullable<Session['user']> & { id: string }
+  active: ActiveSession
 }
 
 export type RouteContext<P = Record<string, string>> = {
@@ -27,9 +21,16 @@ export type AuthedHandler<P> = (
   session: AuthedSession
 ) => Promise<Response> | Response
 
+export type Audience = 'staff' | 'client' | 'any'
+
 export interface WithAuthOptions {
-  role?: Role
+  /** Who may call the route. Default 'staff'; a mismatch answers 404. */
+  audience?: Audience
+  /** Platform admins only (staff with verified MFA). */
+  platformAdmin?: boolean
   skipMfaCheck?: boolean
+  /** Allow accounts that have not enrolled in MFA yet (enrollment routes only). */
+  allowUnenrolled?: boolean
 }
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
@@ -64,14 +65,29 @@ export function withAuth<P = Record<string, string>>(
   return async (req, ctx) => {
     if (!sameOrigin(req)) return apiError('FORBIDDEN', 'Cross-origin request rejected')
 
-    const session = await auth()
-    if (!session?.user?.id) return apiError('UNAUTHORIZED')
-    if (opts.role && !hasRole(session.user.role, opts.role)) {
-      return apiError('FORBIDDEN')
+    const active = await getActiveSession()
+    if (!active) return apiError('UNAUTHORIZED')
+
+    if (!active.mfaEnabled && !opts.allowUnenrolled) {
+      return apiError('FORBIDDEN', 'MFA enrollment required')
     }
-    if (!opts.skipMfaCheck && session.user.mfaEnabled && !session.user.mfaVerified) {
+    if (active.mfaEnabled && !active.mfaVerified && !opts.skipMfaCheck) {
       return apiError('FORBIDDEN', 'MFA verification required')
     }
-    return handler(req, ctx, session as AuthedSession)
+
+    const audience = opts.audience ?? 'staff'
+    if (audience === 'staff' && active.accountKind !== 'STAFF') return apiError('NOT_FOUND')
+    if (audience === 'client' && active.accountKind !== 'CLIENT') return apiError('NOT_FOUND')
+
+    if (opts.platformAdmin) {
+      if (active.accountKind !== 'STAFF') return apiError('NOT_FOUND')
+      if (!active.isPlatformAdmin || !active.mfaEnabled || !active.mfaVerified) {
+        return apiError('FORBIDDEN')
+      }
+    }
+
+    const session = await auth()
+    if (!session?.user?.id) return apiError('UNAUTHORIZED')
+    return handler(req, ctx, { ...session, active } as AuthedSession)
   }
 }

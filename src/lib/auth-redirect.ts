@@ -59,3 +59,26 @@ export function markSignedIn() {
 export function clearSignedInMarker() {
   document.cookie = `${SIGNED_IN_MARKER}=; Path=/; Max-Age=0; SameSite=Lax`
 }
+
+/* ── Page-wall rules (shared by the proxy and the server guards) ── */
+
+/** Signed-out/revoked sessions are sent here to clear the cookie, then on to /login. */
+export const SESSION_END_PATH = '/api/session/end'
+
+/** The only places a client account may visit. */
+export const CLIENT_ALLOWED_PREFIXES = ['/portal', '/settings', '/setup-mfa', '/verify-mfa', '/login']
+
+/** The only places someone without MFA enrolled may visit. */
+export const ENROLLMENT_ALLOWED_PREFIXES = ['/setup-mfa', '/login']
+
+function matchesPrefix(pathname: string, prefixes: readonly string[]): boolean {
+  return prefixes.some((p) => pathname === p || pathname.startsWith(p + '/'))
+}
+
+export function clientMayVisit(pathname: string): boolean {
+  return matchesPrefix(pathname, CLIENT_ALLOWED_PREFIXES)
+}
+
+export function enrollmentMayVisit(pathname: string): boolean {
+  return matchesPrefix(pathname, ENROLLMENT_ALLOWED_PREFIXES)
+}

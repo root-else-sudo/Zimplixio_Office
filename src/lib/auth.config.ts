@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from 'next-auth'
+import type { AccountKind } from './accounts'
 
 export const authConfig: NextAuthConfig = {
   providers: [],
@@ -18,6 +19,10 @@ export const authConfig: NextAuthConfig = {
         token.mfaEnabled = user.mfaEnabled
         token.mfaSecret = user.mfaSecret
         token.mfaVerified = false
+        token.companyId = user.companyId
+        token.accountKind = user.accountKind
+        token.isPlatformAdmin = user.isPlatformAdmin
+        token.sessionVersion = user.sessionVersion
       }
       // Per-login session id — MFA proofs are bound to it. Also backfills
       // tokens issued before this field existed.
@@ -30,6 +35,10 @@ export const authConfig: NextAuthConfig = {
       session.user.mfaEnabled = token.mfaEnabled as boolean
       session.user.mfaVerified = token.mfaVerified as boolean
       session.user.sid = token.sid as string
+      session.user.companyId = token.companyId as string
+      session.user.accountKind = token.accountKind as AccountKind
+      session.user.isPlatformAdmin = token.isPlatformAdmin as boolean
+      session.user.sessionVersion = token.sessionVersion as number
       return session
     },
   },

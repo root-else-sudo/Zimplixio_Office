@@ -2,11 +2,14 @@ import { PrismaClient, DepartmentKey, DepartmentStatus } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import bcrypt from 'bcryptjs'
 import * as dotenv from 'dotenv'
+import { assertAccountRules, normalizeEmail } from '../src/lib/accounts'
 
 dotenv.config()
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! })
 const prisma = new PrismaClient({ adapter } as any)
+
+const INTERNAL_COMPANY_ID = 'internal-zimplixio'
 
 type DepartmentSeed = {
   key: DepartmentKey
@@ -135,19 +138,29 @@ async function seedAdminUser() {
   const email = process.env.SEED_EMAIL ?? 'admin@zimplixio.com'
   const password = process.env.SEED_PASSWORD ?? 'changeme123'
 
-  const existing = await prisma.user.findUnique({ where: { email } })
+  const normalizedEmail = normalizeEmail(email)
+  assertAccountRules({ email: normalizedEmail, companyKind: 'INTERNAL', role: 'ADMIN' })
+
+  const company = await prisma.company.upsert({
+    where: { id: INTERNAL_COMPANY_ID },
+    update: {},
+    create: { id: INTERNAL_COMPANY_ID, name: 'Zimplixio', kind: 'INTERNAL' },
+  })
+
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } })
   if (existing) {
-    console.log(`User ${email} already exists, skipping.`)
+    console.log(`User ${normalizedEmail} already exists, skipping.`)
     return
   }
 
   const hash = await bcrypt.hash(password, 12)
   const user = await prisma.user.create({
     data: {
-      email,
+      email: normalizedEmail,
       name: 'Admin',
       passwordHash: hash,
       role: 'ADMIN',
+      company: { connect: { id: company.id } },
     },
   })
 

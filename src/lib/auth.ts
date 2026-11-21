@@ -5,6 +5,7 @@ import { prisma } from './prisma'
 import { authConfig } from './auth.config'
 import { rateLimit } from './ratelimit'
 import { verifyMfaProof } from './mfa-proof'
+import { accountKindOf, normalizeEmail } from './accounts'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -21,9 +22,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const sessionId = String(token.sid)
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { mfaEnabled: true, mfaSecret: true },
+        select: {
+          mfaEnabled: true,
+          mfaSecret: true,
+          status: true,
+          role: true,
+          companyId: true,
+          company: { select: { kind: true } },
+        },
       })
-      if (!user) return null // user deleted — end the session
+      if (!user || user.status !== 'ACTIVE') return null // deleted or not active — end the session
+
+      // Re-derive access claims from the DB. token.sessionVersion is deliberately
+      // NOT refreshed here: doing so would heal a revoked token.
+      const accountKind = accountKindOf(user.company.kind)
+      token.companyId = user.companyId
+      token.accountKind = accountKind
+      token.isPlatformAdmin = user.role === 'ADMIN' && accountKind === 'STAFF'
+      token.role = user.role
 
       token.mfaEnabled = user.mfaEnabled
       token.mfaSecret = user.mfaSecret
@@ -46,18 +62,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
+        const email = normalizeEmail(credentials.email as string)
         const limit = await rateLimit({
           scope: 'auth.login',
-          actor: credentials.email as string,
+          actor: email,
           limit: 5,
           windowMs: 15 * 60 * 1000,
         })
         if (!limit.allowed) return null
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email },
+          include: { company: { select: { kind: true, status: true } } },
         })
-        if (!user) return null
+        if (!user || !user.passwordHash) return null
+        if (user.status !== 'ACTIVE' || user.company.status !== 'ACTIVE') return null
 
         const valid = await bcrypt.compare(
           credentials.password as string,
@@ -65,6 +84,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         )
         if (!valid) return null
 
+        const accountKind = accountKindOf(user.company.kind)
         return {
           id: user.id,
           email: user.email,
@@ -72,6 +92,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role,
           mfaEnabled: user.mfaEnabled,
           mfaSecret: user.mfaSecret,
+          companyId: user.companyId,
+          accountKind,
+          isPlatformAdmin: user.role === 'ADMIN' && accountKind === 'STAFF',
+          sessionVersion: user.sessionVersion,
         }
       },
     }),

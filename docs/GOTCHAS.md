@@ -12,6 +12,7 @@ Grouped by area:
 - [Styling (Tailwind v4 / CSS)](#styling-tailwind-v4--css)
 - [React](#react)
 - [Local development & testing](#local-development--testing)
+- [Access control (guards, revocation, tests)](#access-control-guards-revocation-tests)
 
 ---
 
@@ -223,3 +224,24 @@ Grouped by area:
 
 - **What happened:** `set -a; . ./.env` mangled a password with special characters, and Prisma failed to authenticate.
 - **Rule:** use `npx tsx --env-file=.env script.ts`, which reads the file literally.
+
+---
+
+## Access control (guards, revocation, tests)
+
+### 28. Proxy and guards must agree, or sign-in loops forever
+
+- **What happened:** a page guard redirected a signed-out-but-cookied user to `/login`, while the proxy saw the (invalid) cookie and bounced them straight back. Result: an infinite redirect loop.
+- **Why:** the proxy and the page/API guards make independent decisions (the proxy reads the token plus a DB check, `isSessionStillActive`; guards read the database through `getActiveSession`). Whenever any layer rejects a session it must send the user to `/api/session/end`, never straight to `/login`, or the layers can bounce the user between each other.
+- **Rule:** any guard (or the proxy's session check) that rejects a session sends the user to `/api/session/end` (`SESSION_END_PATH`), never straight to `/login`. That route clears the cookie first, then redirects to `/login?reason=session-ended`, so the proxy and guards agree again. The route is deliberately not wrapped in `withAuth`, and is safe to hit while signed out.
+
+### 29. Layouts and templates don't re-run for in-group soft navigation, so a layout-only guard is not a revocation boundary
+
+- **What happened:** live check (2026-11-20): after `bump-session`, revoked staff navigating department to `/settings` was ended, but department to department, or Product/Research tab to tab, kept rendering pages until a hard load. API calls were still refused.
+- **Why:** layouts persist across soft navigations, and templates only re-mount when their child segment changes, so neither re-runs the guard for navigations inside one route group.
+- **Rule:** the fix was a DB-backed session check in the Node-runtime proxy (`isSessionStillActive`, `src/lib/proxy-session.ts`), which every page request passes through; invalid session or DB error goes to `/api/session/end`. Keep guards in both layout and template as defense in depth. After any change to guards or the proxy, test revocation with a real click, not `page.goto`.
+
+### 30. The test suite refuses to run against a non-`_test` database
+
+- **What happened:** nothing yet, by design. Tests create and delete users and companies, so running them against the dev database would destroy real rows.
+- **Rule:** `test/setup/guard.ts` throws unless `DATABASE_URL_TEST` is set and names a database ending in `_test`. Create the database once and point `DATABASE_URL_TEST` at it; never weaken or bypass the guard.

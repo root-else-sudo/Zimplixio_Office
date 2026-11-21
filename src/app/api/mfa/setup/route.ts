@@ -22,11 +22,11 @@ export const POST = withAuth(async (req: NextRequest, _ctx, session) => {
 
   try {
     // This route skips the normal MFA gate so first-time enrollment works.
-    // But if MFA is already on, only an MFA-verified session may re-enroll —
-    // otherwise a password alone could swap in a new authenticator and get in.
+    // Once a factor is enrolled it is never replaced here (even by a verified session):
+    // re-enrollment is admin-reset only, otherwise a stolen session could swap the authenticator.
     const current = await prisma.user.findUnique({ where: { id: userId }, select: { mfaEnabled: true } })
-    if (current?.mfaEnabled && !session.user.mfaVerified) {
-      return apiError('FORBIDDEN', 'MFA verification required')
+    if (current?.mfaEnabled) {
+      return apiError('FORBIDDEN', 'MFA is already set up for this account')
     }
 
     if (body.action === 'create') {
@@ -59,4 +59,4 @@ export const POST = withAuth(async (req: NextRequest, _ctx, session) => {
   } catch (err) {
     return toApiError(err, 'mfa.setup')
   }
-}, { skipMfaCheck: true })
+}, { audience: 'any', skipMfaCheck: true, allowUnenrolled: true })

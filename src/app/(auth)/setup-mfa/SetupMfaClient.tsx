@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import QRCode from 'qrcode'
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { AuthCard, AuthAlert, AuthFooterLine } from '@/components/auth/AuthCard'
 import { CodeInput } from '@/components/auth/CodeInput'
+import { signOutDeliberately } from '@/lib/sign-out'
 import { useCodeVerification, toVerifyResult } from '@/components/auth/useCodeVerification'
 
 export default function SetupMfaClient() {
@@ -69,11 +69,11 @@ export default function SetupMfaClient() {
   const verified = status === 'success'
 
   const backFooter = (
-    <AuthFooterLine icon={ArrowLeft}>
+    <AuthFooterLine icon={LogOut}>
       Not now?{' '}
-      <Link href="/settings" className="auth-link">
-        Back to settings
-      </Link>
+      <button type="button" className="auth-link" onClick={() => void signOutDeliberately()}>
+        Sign out
+      </button>
     </AuthFooterLine>
   )
 

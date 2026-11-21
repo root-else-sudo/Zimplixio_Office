@@ -13,6 +13,9 @@
     "backfill:post-versions": "tsx scripts/backfill-post-versions.ts",
     "trigger:stale-check": "tsx scripts/trigger-stale-check.ts",
     "test:whatsapp": "tsx scripts/test-whatsapp.ts",
+    "access": "tsx --env-file=.env scripts/access-admin.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepare": "husky"
   },
   "prisma": {
@@ -63,6 +66,7 @@
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "4.1.12"
   }
 }

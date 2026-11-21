@@ -8,16 +8,48 @@ datasource db {
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
+model Company {
+  id        String        @id @default(cuid())
+  name      String
+  kind      CompanyKind
+  status    CompanyStatus @default(ACTIVE)
+  users     User[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+enum CompanyKind {
+  INTERNAL
+  CLIENT
+}
+
+enum CompanyStatus {
+  ACTIVE
+  DEACTIVATED
+}
+
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(REVIEWER)
-  mfaEnabled   Boolean  @default(false)
-  mfaSecret    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String     @id @default(cuid())
+  name           String
+  email          String     @unique
+  passwordHash   String?
+  role           Role       @default(REVIEWER)
+  mfaEnabled     Boolean    @default(false)
+  mfaSecret      String?
+  companyId      String
+  company        Company    @relation(fields: [companyId], references: [id])
+  status         UserStatus @default(ACTIVE)
+  sessionVersion Int        @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([companyId])
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  DEACTIVATED
 }
 
 enum Role {

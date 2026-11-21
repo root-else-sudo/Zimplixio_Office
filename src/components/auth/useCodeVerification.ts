@@ -32,6 +32,9 @@ export async function toVerifyResult(res: Response): Promise<VerifyResult> {
   if (data.error === 'Invalid code') {
     return { ok: false, error: 'That code didn’t match. Use the code your authenticator app shows right now.' }
   }
+  if (data.error === 'MFA is already set up for this account') {
+    return { ok: false, error: 'Two-step sign-in is already set up for this account.' }
+  }
   return { ok: false, error: data.error ?? 'Something went wrong verifying that code. Try again.' }
 }
 
