@@ -128,9 +128,10 @@ Beyond the suite, changes are verified with live checks: ad-hoc Playwright and `
 ## Known Gaps
 
 - **Limited automated tests.** The access layer has a Vitest suite; the research and review features do not yet. See Testing.
-- **User and company management is in progress.** Step 1 (companies, client accounts, the access wall, revocation) is built. There is still no screen to invite users or assign roles; use the interim CLI below until step 2 lands.
+- **Roles can't be assigned from the UI yet.** `/admin` manages companies, invites and account status (steps 1 and 2). New accounts are always `REVIEWER`; granting `ADMIN` and per-department access are later steps.
+- **Invite links are sent by hand.** The admin copies the one-time link from the screen. Delivery by message (Twilio) is step 3.
 - **No password reset or MFA recovery codes.** There's no email-sending service yet. A lost authenticator currently needs a manual database change.
-- **No audit log.** Logins, MFA events and Finding approvals are recorded only in application logs, not in a queryable table.
+- **Audit log covers admin actions only.** Company, user, MFA-reset and invite events are in the Activity log. Logins, MFA failures and Finding approvals are still only in application logs.
 - **Goals and Tasks have no create screen.** The tables exist, but there's no UI or API to add rows.
 - **Older dashboard pages predate the design-token system.** They still use some inline styles and need migrating to the shared classes.
 - **No production Railway environment yet.** The live site runs from the `development` environment.
@@ -209,10 +210,11 @@ The main folders:
 ```
 src/
   app/
-    (auth)/                login, verify-mfa, setup-mfa: server page.tsx + *Client.tsx, shared lamp scene in layout.tsx
+    (auth)/                login, verify-mfa, setup-mfa, invite/[token]: server page.tsx + *Client.tsx, shared lamp scene in layout.tsx
     (dashboard)/           the signed-in app: sidebar layout, departments, settings
       departments/[key]/           generic department page (reserved seats)
       departments/product-research/ static route tree: overview, company profile, guidance, findings, workflow (Probe)
+      admin/                   platform-admin area: companies, users (invites), activity log
     api/                   route handlers: all mutations and job enqueues (findings, mfa, research, research-probe…)
     globals.css            design tokens (:root), Tailwind @theme mapping, shared component classes
   components/
@@ -224,6 +226,7 @@ src/
     mfa-proof.ts           server-signed MFA proofs
     auth-redirect.ts       return-to-page and "session ended" rules
     rbac.ts                withAuth(): session, role and MFA checks for API routes
+    admin/                 admin services (companies, users, invites, audit): the only place admin mutations happen
     research/              Research Engine stages (queries, Tavily, prompts, schemas, dedupe, engine)
     research-probe/        Research Probe stages (gather, deepen, review, prompts, schemas, engine)
     ai-client.ts, ai/      Claude wrapper, cost tracking, Zod → JSON Schema
@@ -287,7 +290,13 @@ Migrations run automatically before each web deploy, through a Pre-Deploy Comman
 
 ## Admin
 
-There's no admin panel yet; user and company management is in progress (step 1 of 5 is built). Until then:
+Platform admins get an **Administration** link in the sidebar, which opens `/admin`:
+
+- **Companies:** create, rename, deactivate or reactivate (deactivating signs every member out).
+- **Users:** invite someone to a company, then copy the one-time invite link shown on screen (valid 72 hours, single use) and send it to them. They set a password and enroll two-step sign-in. You can also reissue a link, rename, deactivate, reactivate or reset a user's MFA.
+- **Activity log:** who did what, newest 100 entries.
+
+The CLI below is now a fallback for when the web app isn't available:
 
 | Task | How |
 |---|---|

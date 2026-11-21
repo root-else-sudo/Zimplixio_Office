@@ -52,3 +52,101 @@
 .settings-status-on {
   @apply text-forest-600;
 }
+
+/* Administration area (platform admin only). */
+.admin-page {
+  @apply mx-auto max-w-5xl space-y-6 px-8 py-10;
+}
+.admin-title {
+  @apply text-2xl font-bold text-charcoal-800;
+}
+.admin-subtitle {
+  @apply mt-1 text-sm text-slate-600;
+}
+.admin-tabs {
+  @apply flex gap-1 border-b border-line;
+}
+.admin-tab {
+  @apply -mb-px border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:text-charcoal-800;
+}
+.admin-tab-active {
+  @apply border-forest-600 text-forest-600 hover:text-forest-600;
+}
+.admin-toolbar {
+  @apply flex items-center justify-between gap-4;
+}
+.admin-section-title {
+  @apply text-base font-semibold text-charcoal-800;
+}
+.admin-card {
+  @apply space-y-4 p-6;
+}
+.admin-table-wrap {
+  @apply overflow-x-auto;
+}
+.admin-table {
+  @apply w-full border-collapse text-left text-sm;
+}
+.admin-table th {
+  @apply border-b border-line px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-600;
+}
+.admin-table td {
+  @apply border-b border-line px-5 py-3.5 text-charcoal-800;
+}
+.admin-table tbody tr:last-child td {
+  @apply border-b-0;
+}
+.admin-table tbody tr:hover {
+  @apply bg-canvas;
+}
+.admin-table-link {
+  @apply font-medium text-forest-600 hover:underline;
+}
+.admin-empty {
+  @apply p-8 text-center text-sm text-slate-600;
+}
+.badge-status-active {
+  @apply bg-forest-50 text-forest-700;
+}
+.badge-status-deactivated {
+  @apply bg-copper-100 text-copper-600;
+}
+.badge-status-pending {
+  @apply bg-copper-100 text-copper-600;
+}
+.badge-kind-internal {
+  @apply bg-navy-800 text-on-dark;
+}
+.badge-kind-client {
+  @apply bg-canvas text-slate-600 border border-line;
+}
+.admin-form {
+  @apply flex flex-wrap items-end gap-3;
+}
+.admin-field {
+  @apply flex min-w-56 flex-1 flex-col gap-1.5;
+}
+.admin-label {
+  @apply text-xs font-semibold uppercase tracking-wider text-slate-600;
+}
+.admin-input {
+  @apply w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-charcoal-800 placeholder:text-slate-400;
+}
+.admin-error {
+  @apply rounded-xl border border-error bg-surface px-3.5 py-2.5 text-sm font-medium text-error;
+}
+.admin-actions {
+  @apply flex flex-wrap items-center gap-3;
+}
+.admin-confirm {
+  @apply flex flex-wrap items-center gap-3 rounded-xl border border-error bg-surface px-4 py-3 text-sm text-charcoal-800;
+}
+.admin-back {
+  @apply text-sm font-medium text-forest-600 hover:underline;
+}
+.admin-note {
+  @apply text-sm text-slate-600;
+}
+.admin-muted {
+  @apply text-slate-600;
+}

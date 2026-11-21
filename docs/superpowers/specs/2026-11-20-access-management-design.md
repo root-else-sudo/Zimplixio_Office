@@ -4,7 +4,7 @@
 |---|---|
 | **Document type** | Design specification |
 | **Date** | 2026-11-20 |
-| **Status** | Draft for owner review. **Step 1 built and live-verified locally (2026-11-20); pending owner commit.** The in-group soft-navigation finding was fixed with a DB-backed session check in the proxy. |
+| **Status** | Draft for owner review. **Steps 1 and 2 built and live-verified locally (2026-11-20 and 2026-11-21); pending owner commit.** Step 2 (admin area, invites, audit log) passed all 12 live checks. The in-group soft-navigation finding was fixed with a DB-backed session check in the proxy. |
 | **Scope** | Whole module across steps 1–5. Step 1 in full detail; steps 2–3 at design level; steps 4–5 named, out of scope |
 
 > This repository is public. This document deliberately contains no client names, real accounts or credentials.
@@ -276,7 +276,7 @@ Route groups and who may enter:
   - In step 2 the link (`/invite/<token>`) is **shown once on screen** for the admin to copy.
 - **Accepting an invite (`/invite/[token]`):** the lamp scene, then set password (with a strength rule), then MFA enrollment (the existing setup flow), then the user becomes `ACTIVE` and lands in their area.
   - Invalid, expired or used links show one generic message.
-  - The page is rate limited.
+  - The accept POST is rate limited; the page itself is not, because tokens are 256-bit random and single-use, so enumeration is not feasible.
 - **Activity log (`AuditLog`):**
   - fields: `actorId`, `action` (e.g. `company.created`, `user.deactivated`, `mfa.reset`, `invite.issued`, `invite.accepted`), `targetType`/`targetId`, `companyId`, `metadata` (JSON, no secrets), `createdAt`
   - written in the same transaction as the change

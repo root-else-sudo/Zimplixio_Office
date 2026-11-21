@@ -3,7 +3,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const API_ROOT = path.resolve(__dirname, '../src/app/api')
-const EXEMPT = ['auth', path.join('session', 'end')]
+const EXEMPT = [
+  'auth',
+  path.join('session', 'end'),
+  // Deliberate public endpoint (a person with no account yet): protected by a
+  // single-use hashed token, a same-origin check and rate limits.
+  path.join('invite', 'accept'),
+]
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 
 function stripComments(src: string): string {
@@ -65,4 +71,51 @@ describe('findUnwrappedHandlers', () => {
 
 describe('API coverage', () => {
   it('every exported HTTP method of every API route is wrapped in withAuth', () => expect(offenders()).toEqual([]))
+})
+
+/** Returns exported methods whose withAuth(...) call does not end with an options object containing `platformAdmin: true`. */
+export function findMissingPlatformAdmin(source: string): string[] {
+  const src = stripComments(source)
+  const bad: string[] = []
+  for (const m of METHODS) {
+    const start = src.search(new RegExp(`export\\s+const\\s+${m}\\b`))
+    if (start === -1) continue
+    const open = src.indexOf('(', src.indexOf('withAuth', start))
+    let depth = 0
+    let end = -1
+    for (let i = open; i < src.length; i++) {
+      if (src[i] === '(') depth++
+      else if (src[i] === ')' && --depth === 0) { end = i; break }
+    }
+    const args = end === -1 ? '' : src.slice(open + 1, end)
+    if (!/platformAdmin\s*:\s*true\s*,?\s*\}\s*,?\s*$/.test(args)) bad.push(m)
+  }
+  return bad
+}
+
+function adminRoutesMissingPlatformAdmin(): string[] {
+  const adminRoot = path.join(API_ROOT, 'admin')
+  if (!fs.existsSync(adminRoot)) return ['(no admin routes)']
+  return routes(adminRoot).flatMap((f) =>
+    findMissingPlatformAdmin(fs.readFileSync(f, 'utf8')).map((m) => `${path.relative(API_ROOT, f)}: ${m}`),
+  )
+}
+
+describe('findMissingPlatformAdmin', () => {
+  it('flags a withAuth call without platformAdmin', () =>
+    expect(findMissingPlatformAdmin(
+      'export const POST = withAuth(async () => { return x }, { audience: "staff" })',
+    )).toEqual(['POST']))
+  it('ignores platformAdmin that is only in a comment or inside the handler', () =>
+    expect(findMissingPlatformAdmin(
+      '// { platformAdmin: true }\nexport const POST = withAuth(async () => { const o = { platformAdmin: true }; return o })',
+    )).toEqual(['POST']))
+  it('passes with the option, generic allowed', () =>
+    expect(findMissingPlatformAdmin(
+      'export const PATCH = withAuth<{ id: string }>(async () => x, { platformAdmin: true })',
+    )).toEqual([]))
+})
+
+describe('Admin API coverage', () => {
+  it('every admin route requires platformAdmin', () => expect(adminRoutesMissingPlatformAdmin()).toEqual([]))
 })

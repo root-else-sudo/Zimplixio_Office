@@ -38,7 +38,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 // Same-origin check for state-changing requests. Compares the Origin (or
 // Referer fallback) host against the request Host. Browsers always set Origin
 // on cross-origin POSTs, so a mismatch is a strong CSRF signal.
-function sameOrigin(req: NextRequest): boolean {
+export function sameOrigin(req: NextRequest): boolean {
   if (SAFE_METHODS.has(req.method)) return true
 
   const host =

@@ -19,7 +19,9 @@ V1 (Posts/LinkedIn, Projects/Gantt, Opportunities, a separate Python repo) was r
 
 - **Access Management step 1 (Foundation), 2026-11-20:** companies, staff vs client accounts, the deny-by-default wall (proxy + guards + `withAuth`), client portal shell, immediate session revocation via `sessionVersion`, mandatory MFA, interim admin CLI (`npm run access`), Vitest suite (`npm test`). Built and live-verified locally; spec at `docs/superpowers/specs/2026-11-20-access-management-design.md`. Revocation is enforced per request by a DB-backed session check in the proxy (resolved: layouts/templates alone miss in-group soft navigation).
 
-**Next:** access-management step 2 (admin screens, invite links), then step 3 (Twilio delivery of invites and password reset). MFA recovery codes are still a gap.
+- **Access Management step 2 (Administration + invite links), 2026-11-21:** `/admin` (Companies, Users, Activity log) for platform admins, one-time invite links (hashed single-use tokens, 72h TTL), public `/invite/[token]` accept flow with forced MFA enrollment, MFA reset, deactivate/reactivate users and companies, and an `AuditLog` table. Built and live-verified locally (12 checks); pending owner commit. The CLI is now a fallback.
+
+**Next:** access-management step 3 (Twilio delivery of invites and password reset). MFA recovery codes are still a gap.
 
 **Not built yet:** Engineering, Marketing, Sales, Finance and Operations are reserved seats (Department row + empty Goal/Task/Knowledge/Kpi tables). Building one repeats the Product/Research pattern below.
 
@@ -151,6 +153,7 @@ Don't use `arch -x86_64`; it fails with "Bad CPU type".
 17. **Revocation is enforced in the proxy, with guards as defense in depth.** `src/proxy.ts` runs a DB-backed session check (`isSessionStillActive`, `src/lib/proxy-session.ts`) on every logged-in page request except `/login`, before MFA/enrollment/kind redirects; failure or DB error goes to `/api/session/end`. Also keep `requireStaff`/`requireClient`/`requireSignedIn` in BOTH `layout.tsx` and `template.tsx` of every route group. A layout-only guard is not a revocation boundary: layouts and templates don't re-run for in-group soft navigation. Test revocation with a real click, not `page.goto`. (GOTCHAS #28, #29)
 18. **`tenantDb` (`src/lib/tenancy.ts`) is the only path to tenant-owned data.** No raw Prisma queries on client-owned models; add each new model to `TENANT_OWNED_MODELS`.
 19. **`npm test` (Vitest) must pass before declaring done.** Tests run against a separate `_test` database (`DATABASE_URL_TEST`); the guard refuses anything else. (GOTCHAS #30)
+20. **Admin mutations go only through `src/lib/admin/*`, with the `AuditLog` row written in the same transaction as the change.** Never update users, companies or invites from a route or page directly. Every admin page calls `requirePlatformAdmin()` first (the admin `layout.tsx` and `template.tsx` do too), and every `/api/admin/**` route uses `withAuth(..., { platformAdmin: true })`. Audit metadata never holds passwords, tokens, token hashes or MFA secrets. Invite tokens are stored only as `sha256` hashes. (SECURITY.md)
 
 ## Key Environment Variables
 Full reference in `docs/ENV.md`. The variables that affect code behavior:

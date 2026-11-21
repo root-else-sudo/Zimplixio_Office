@@ -2,7 +2,7 @@ import NextAuth from 'next-auth'
 import { authConfig } from '@/lib/auth.config'
 import { NextResponse } from 'next/server'
 import {
-  authUrl, SIGNED_IN_MARKER, SESSION_END_PATH, clientMayVisit, enrollmentMayVisit,
+  authUrl, SIGNED_IN_MARKER, SESSION_END_PATH, clientMayVisit, enrollmentMayVisit, isPublicPath,
 } from '@/lib/auth-redirect'
 import { isSessionStillActive } from '@/lib/proxy-session'
 import { logger } from '@/lib/logger'
@@ -17,12 +17,13 @@ export default auth(async (req) => {
   const mfaEnabled = req.auth?.user?.mfaEnabled
   const mfaVerified = req.auth?.user?.mfaVerified
 
-  const publicPaths = ['/login']
   const mfaPaths = ['/verify-mfa', '/setup-mfa']
   // Where the person was trying to go — carried through login and MFA.
   const returnTo = pathname + search
 
-  if (publicPaths.includes(pathname)) {
+  if (isPublicPath(pathname)) {
+    // Invite links must open for anyone, signed in or not; no session check.
+    if (pathname === '/invite' || pathname.startsWith('/invite/')) return NextResponse.next()
     if (isLoggedIn) return NextResponse.redirect(new URL('/', req.url))
     return NextResponse.next()
   }

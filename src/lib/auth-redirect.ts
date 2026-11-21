@@ -75,6 +75,13 @@ function matchesPrefix(pathname: string, prefixes: readonly string[]): boolean {
   return prefixes.some((p) => pathname === p || pathname.startsWith(p + '/'))
 }
 
+/** Pages anyone may open without a session. `/invite/*` stays open even when signed in. */
+export const PUBLIC_PREFIXES = ['/login', '/invite'] as const
+
+export function isPublicPath(pathname: string): boolean {
+  return matchesPrefix(pathname, PUBLIC_PREFIXES)
+}
+
 export function clientMayVisit(pathname: string): boolean {
   return matchesPrefix(pathname, CLIENT_ALLOWED_PREFIXES)
 }

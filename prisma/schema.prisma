@@ -29,21 +29,54 @@ enum CompanyStatus {
 }
 
 model User {
-  id             String     @id @default(cuid())
+  id             String       @id @default(cuid())
   name           String
-  email          String     @unique
+  email          String       @unique
   passwordHash   String?
-  role           Role       @default(REVIEWER)
-  mfaEnabled     Boolean    @default(false)
+  role           Role         @default(REVIEWER)
+  mfaEnabled     Boolean      @default(false)
   mfaSecret      String?
   companyId      String
-  company        Company    @relation(fields: [companyId], references: [id])
-  status         UserStatus @default(ACTIVE)
-  sessionVersion Int        @default(0)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  company        Company      @relation(fields: [companyId], references: [id])
+  status         UserStatus   @default(ACTIVE)
+  sessionVersion Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  invites        UserInvite[] @relation("InviteUser")
+  invitesCreated UserInvite[] @relation("InviteCreator")
+  auditEntries   AuditLog[]
 
   @@index([companyId])
+}
+
+// Single-use invite link. Only sha256(token) is stored, never the raw token.
+model UserInvite {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation("InviteUser", fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  revokedAt   DateTime?
+  createdById String
+  createdBy   User      @relation("InviteCreator", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  targetType String
+  targetId   String
+  companyId  String?
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 enum UserStatus {
@@ -326,15 +359,15 @@ model ProbeReviewGuidance {
 // which prospect/run first surfaced it for audit purposes, but the rule
 // itself applies to every future run, any company.
 model ProbeDomainRule {
-  id               String              @id @default(cuid())
-  departmentId     String
-  department       Department          @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  domain           String
-  mode             ProbeDomainRuleMode
-  reason           String
+  id                String              @id @default(cuid())
+  departmentId      String
+  department        Department          @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  domain            String
+  mode              ProbeDomainRuleMode
+  reason            String
   sourceCompanyName String
-  sourceRunId      String
-  createdAt        DateTime            @default(now())
+  sourceRunId       String
+  createdAt         DateTime            @default(now())
 
   @@unique([departmentId, domain])
   @@index([departmentId, mode])

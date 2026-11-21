@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { signOutDeliberately } from '@/lib/sign-out'
 import {
-  LogOut, FlaskConical, Wrench, Megaphone, TrendingUp, DollarSign, Settings2, Settings,
+  LogOut, FlaskConical, Wrench, Megaphone, TrendingUp, DollarSign, Settings2, Settings, ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
 import { departmentSlug } from '@/lib/departments'
@@ -31,10 +31,11 @@ function initials(name: string) {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
 }
 
-export default function Sidebar({ departments }: { departments: SidebarDepartment[] }) {
+export default function Sidebar({ departments, isPlatformAdmin = false }: { departments: SidebarDepartment[]; isPlatformAdmin?: boolean }) {
   const pathname = usePathname()
   const { data: session } = useSession()
 
+  const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/')
   const userName = session?.user?.name ?? session?.user?.email ?? 'User'
   const userRole = session?.user?.role ?? ''
 
@@ -108,6 +109,19 @@ export default function Sidebar({ departments }: { departments: SidebarDepartmen
             <p className="text-xs capitalize" style={{ color: 'rgba(255,255,255,0.35)' }}>{userRole.toLowerCase()}</p>
           </div>
         </div>
+
+        {isPlatformAdmin && (
+          <Link
+            href="/admin"
+            className="flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-sm font-medium transition-colors"
+            style={{ color: isAdminPath ? '#fff' : 'rgba(255,255,255,0.4)', background: isAdminPath ? 'var(--navy-700)' : undefined }}
+            onMouseEnter={e => { if (!isAdminPath) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)' }}
+            onMouseLeave={e => { if (!isAdminPath) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)' }}
+          >
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            Administration
+          </Link>
+        )}
 
         <Link
           href="/settings"
